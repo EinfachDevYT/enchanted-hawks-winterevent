@@ -249,7 +249,7 @@
     const board = h(`<div class="slide ${isSolved ? 'solved' : ''}"></div>`);
     const side = h(`<div class="slide-side">
       <div class="slide-ref"><span>So soll es aussehen</span><img alt="Vorlage für das Puzzle" src="${img}"></div>
-      <button class="btn ghost sm" type="button" data-hint>💡 Tipp: nächster Zug</button>
+      <button class="btn ghost sm" type="button" data-hint disabled></button>
       <p class="slide-help">Klickt ein leuchtendes Teil neben der Lücke an, dann rutscht es hinein. Baut das Bild wie in der Vorlage nach.</p>
     </div>`);
     const meta = h(`<div class="game-meta"></div>`);
@@ -270,6 +270,7 @@
         b.classList.remove('hint');
       });
       side.hidden = isSolved;
+      updateHint();
       meta.textContent = isSolved ? 'Das Bild ist wieder ganz! Lest den Code im Bild ✨' : `Züge: ${moves}`;
     };
     function move(t) {
@@ -283,9 +284,23 @@
       }
       render();
     }
-    side.querySelector('[data-hint]').addEventListener('click', () => {
+    // Tipps: höchstens 2, der erste ab Zug 20, der zweite frühestens 10 Züge später
+    const HINT_MAX = 2, HINT_FIRST = 20, HINT_GAP = 10;
+    let hintsUsed = 0, lastHintAt = -Infinity;
+    const hintBtn = side.querySelector('[data-hint]');
+    const nextHintAt = () => Math.max(HINT_FIRST, lastHintAt + HINT_GAP);
+    function updateHint() {
+      const left = HINT_MAX - hintsUsed;
+      if (left <= 0) { hintBtn.disabled = true; hintBtn.textContent = '💡 Keine Tipps mehr'; return; }
+      const at = nextHintAt();
+      hintBtn.disabled = moves < at;
+      hintBtn.textContent = moves < at ? `💡 Tipp ab Zug ${at}` : `💡 Tipp (${left} übrig)`;
+    }
+    hintBtn.addEventListener('click', () => {
+      if (hintBtn.disabled) return;
       const next = solve(pos)[0];
       if (next == null) return;
+      hintsUsed++; lastHintAt = moves; updateHint();
       tiles.forEach((b) => b.classList.remove('hint'));
       void tiles[next].offsetWidth; tiles[next].classList.add('hint');
     });
