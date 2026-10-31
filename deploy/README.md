@@ -2,20 +2,19 @@
 
 Die Website besteht nur aus **statischen Dateien** im Ordner `docs/`. Auf dem Server läuft **kein Node.js**, keine Datenbank und kein Backend. nginx liefert die Dateien einfach aus.
 
-**Ziel:** `https://winterevent.deine-domain.de`
+**Ziel:** `https://winterevent.enchantedhawks.eu`
 
-> In allen Befehlen ersetzt du `winterevent.deine-domain.de` durch deine echte Subdomain.
 > Die Anleitung gilt für **Ubuntu 22.04/24.04 oder Debian 12**. Du brauchst SSH-Zugang mit `sudo`.
 
 ---
 
 ## Schritt 1: Subdomain auf den Server zeigen lassen (DNS)
 
-Lege bei deinem Domain-Anbieter (IONOS, Strato, Cloudflare, Hetzner …) einen DNS-Eintrag an:
+Lege beim Anbieter, bei dem `enchantedhawks.eu` verwaltet wird, einen DNS-Eintrag an:
 
 | Typ | Name | Wert |
 |---|---|---|
-| `A` | `winterevent` | IPv4-Adresse deines Servers |
+| `A` | `winterevent` | IPv4-Adresse deines Servers (läuft es auf demselben Server wie enchantedhawks.eu, ist das `5.231.74.56`) |
 | `AAAA` (optional) | `winterevent` | IPv6-Adresse deines Servers |
 
 Die IP deines Servers findest du auf dem Server mit:
@@ -27,7 +26,7 @@ curl -4 ifconfig.me
 Prüfen, ob der Eintrag schon greift (kann ein paar Minuten bis Stunden dauern):
 
 ```bash
-dig +short winterevent.deine-domain.de
+dig +short winterevent.enchantedhawks.eu
 ```
 
 Wenn hier die IP deines Servers erscheint, geht es weiter.
@@ -37,6 +36,8 @@ Wenn hier die IP deines Servers erscheint, geht es weiter.
 ---
 
 ## Schritt 2: Pakete installieren
+
+> Läuft enchantedhawks.eu schon auf diesem Server mit nginx, ist das meiste bereits installiert. Der Befehl schadet trotzdem nicht. Die Winterevent-Seite bekommt eine **eigene** Konfigurationsdatei, eure Hauptseite bleibt unverändert.
 
 ```bash
 sudo apt update
@@ -72,12 +73,6 @@ Konfiguration kopieren:
 sudo cp /var/www/enchanted-hawks-winterevent/deploy/nginx/winterevent.conf /etc/nginx/sites-available/winterevent.conf
 ```
 
-Deine Subdomain eintragen:
-
-```bash
-sudo sed -i 's/winterevent.example.de/winterevent.deine-domain.de/' /etc/nginx/sites-available/winterevent.conf
-```
-
 Seite aktivieren:
 
 ```bash
@@ -99,7 +94,7 @@ sudo systemctl reload nginx
 Kurzer Test (sollte `HTTP/1.1 200 OK` zeigen):
 
 ```bash
-curl -sI http://winterevent.deine-domain.de | head -1
+curl -sI http://winterevent.enchantedhawks.eu | head -1
 ```
 
 ---
@@ -109,7 +104,7 @@ curl -sI http://winterevent.deine-domain.de | head -1
 Die Codes werden **im Browser** entschlüsselt, und Browser erlauben das nur über **https**. Ohne HTTPS zeigt die Seite nur einen Hinweis an.
 
 ```bash
-sudo certbot --nginx -d winterevent.deine-domain.de --redirect
+sudo certbot --nginx -d winterevent.enchantedhawks.eu --redirect
 ```
 
 certbot fragt beim ersten Mal nach einer E-Mail-Adresse und den Nutzungsbedingungen. Danach baut es das Zertifikat automatisch in die nginx-Konfiguration ein und leitet `http` auf `https` um. Das Zertifikat verlängert sich von selbst. Testen kannst du das mit:
@@ -122,7 +117,7 @@ sudo certbot renew --dry-run
 
 ## Schritt 6: Testen
 
-1. Öffne `https://winterevent.deine-domain.de`
+1. Öffne `https://winterevent.enchantedhawks.eu`
 2. Gib einen Startcode aus deiner geheimen `CODES.md` ein.
 3. Öffne den Moorland-Tresor mit den vier Zahlen. Der 3D-Tresor sollte sich öffnen.
 

@@ -58,7 +58,7 @@ button { font: inherit; color: inherit; }
 .hud > * { pointer-events: auto; }
 /* Marke exakt wie auf enchantedhawks.eu */
 .brand { display: flex; align-items: center; gap: .75rem; text-decoration: none; color: var(--brand-text); }
-.brand-logo { width: 2.25rem; height: 2.25rem; border-radius: 0; object-fit: cover; display: block; }
+.brand-logo { width: 2.25rem; height: 2.25rem; object-fit: contain; display: block; filter: drop-shadow(0 0 5px rgba(242, 172, 85, 0.45)); }
 .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-name { font-family: 'Oswald', 'Haettenschweiler', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 1.125rem; }
 .brand-tag { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: .75rem; color: var(--brand-dim); }
