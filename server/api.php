@@ -42,10 +42,16 @@ CREATE TABLE IF NOT EXISTS codes(code TEXT PRIMARY KEY, team_id INTEGER NOT NULL
 CREATE TABLE IF NOT EXISTS progress(team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE, stage INTEGER NOT NULL, answer TEXT, unlocked_at INTEGER, solved_at INTEGER, opened_at INTEGER, game TEXT, PRIMARY KEY(team_id, stage));
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, team_id INTEGER, at INTEGER, type TEXT, stage INTEGER, info TEXT);
 CREATE TABLE IF NOT EXISTS hits(k TEXT, at INTEGER);
+CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
 CREATE INDEX IF NOT EXISTS hits_k ON hits(k, at);');
 
 function q(string $sql, array $p = []): PDOStatement { global $db; $s = $db->prepare($sql); $s->execute($p); return $s; }
-function event(int $team, string $type, int $stage, string $info = ''): void { q('INSERT INTO events(team_id, at, type, stage, info) VALUES(?,?,?,?,?)', [$team, now(), $type, $stage, $info]); }
+function event(?int $team, string $type, int $stage, string $info = ''): void { q('INSERT INTO events(team_id, at, type, stage, info) VALUES(?,?,?,?,?)', [$team, now(), $type, $stage, $info]); }
+// Einstellungen, die die Eventleitung im Admin-Bereich ändern kann
+function setting(string $k, string $default): string { $v = q('SELECT v FROM settings WHERE k = ?', [$k])->fetchColumn(); return $v === false ? $default : (string) $v; }
+function setSetting(string $k, string $v): void { q('INSERT INTO settings(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v', [$k, $v]); }
+// Testmodus: Startwert aus der Konfiguration, danach im Admin-Bereich umschaltbar
+function testMode(): bool { global $CFG; return setting('test_tools', !empty($CFG['test_tools']) ? '1' : '0') === '1'; }
 // Bremse gegen Durchprobieren
 function limit(string $key, int $max, int $windowSec): void {
   $t = now(); q('DELETE FROM hits WHERE at < ?', [$t - 3600 * 1000]);
@@ -282,7 +288,7 @@ switch ($a) {
   }
 
   case 'test_solve': { // NUR ZUM TESTEN – später entfernen (config: test_tools => false)
-    if (empty($CFG['test_tools'])) fail('Testwerkzeuge sind ausgeschaltet.', 403);
+    if (!testMode()) fail('Der Testmodus ist ausgeschaltet.', 403);
     needAdmin(); $team = needTeam(); $k = (int) ($in['stage'] ?? -1);
     $r = q('SELECT * FROM progress WHERE team_id = ? AND stage = ?', [$team['id'], $k])->fetch();
     if (!$r || !$r['unlocked_at'] || $k >= $LAST) fail('Station nicht erreichbar.', 403);
@@ -298,7 +304,7 @@ switch ($a) {
     $name = trim(mb_substr((string) ($in['name'] ?? ''), 0, 40));
     if ($name === '') fail('Bitte gib deinen Namen ein.');
     if (!password_verify((string) ($in['password'] ?? ''), (string) $CFG['admin_password_hash'])) fail('Falsches Passwort.', 401);
-    out(['ok' => true, 'admin' => adminToken($name), 'name' => $name, 'testTools' => !empty($CFG['test_tools'])]);
+    out(['ok' => true, 'admin' => adminToken($name), 'name' => $name, 'testTools' => testMode()]);
 
   case 'admin_overview': {
     needAdmin();
@@ -317,8 +323,8 @@ switch ($a) {
     }
     $ev = q('SELECT e.*, t.name FROM events e LEFT JOIN teams t ON t.id = e.team_id WHERE e.type != \'vault_fail\' ORDER BY e.id DESC LIMIT 40')->fetchAll();
     out(['ok' => true, 'now' => now(), 'count' => $COUNT, 'stations' => array_map(fn($s) => $s['name'], $ST), 'teams' => $list,
-      'events' => array_map(fn($e) => ['at' => (int) $e['at'], 'team' => $e['name'], 'type' => $e['type'], 'stage' => (int) $e['stage'], 'station' => $ST[(int) $e['stage']]['name'] ?? ''], $ev),
-      'siteUrl' => $CFG['site_url'] ?? '', 'testTools' => !empty($CFG['test_tools'])]);
+      'events' => array_map(fn($e) => ['at' => (int) $e['at'], 'team' => $e['name'], 'type' => $e['type'], 'stage' => (int) $e['stage'], 'station' => $ST[(int) $e['stage']]['name'] ?? '', 'info' => $e['info']], $ev),
+      'siteUrl' => $CFG['site_url'] ?? '', 'testTools' => testMode()]);
   }
 
   case 'admin_create': {
@@ -342,6 +348,13 @@ switch ($a) {
     event($tid, 'created', 0, $by);
     $db->commit();
     out(['ok' => true, 'id' => $tid, 'name' => $name, 'startCode' => q('SELECT code FROM codes WHERE team_id = ? AND stage = 0', [$tid])->fetchColumn()]);
+  }
+
+  case 'admin_set_test': { // Testmodus im Admin-Bereich umschalten
+    $by = needAdmin(); $on = !empty($in['on']);
+    setSetting('test_tools', $on ? '1' : '0');
+    event(null, $on ? 'test_on' : 'test_off', 0, $by);
+    out(['ok' => true, 'testTools' => $on]);
   }
 
   case 'admin_delete':

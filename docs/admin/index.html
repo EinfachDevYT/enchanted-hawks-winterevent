@@ -68,9 +68,12 @@
         <ol class="feed" id="feed"></ol>
       </section>
 
-      <section class="card test" id="testInfo" hidden>
-        <h2>🧪 Testmodus aktiv</h2>
-        <p class="muted">Solange du angemeldet bist, zeigt die Spielseite <b>in diesem Browser</b> an jeder Station einen Knopf „Test: Lösung“. Spieler sehen ihn nie. Vor dem Event in der Server-Konfiguration <code>test_tools</code> auf <code>false</code> setzen.</p>
+      <section class="card test" id="testCard">
+        <div class="row between">
+          <h2>🧪 Testmodus</h2>
+          <button class="switch" id="testToggle" role="switch" aria-checked="false" aria-label="Testmodus umschalten"><span></span></button>
+        </div>
+        <p class="muted" id="testText"></p>
       </section>
     </div>
   </main>

@@ -22,6 +22,7 @@ Unter **`/admin/`** melden sich Eventleiter mit ihrem Namen und dem gemeinsamen 
 - **Club anlegen:** Clubname eingeben → *Erstellen*. Der Startcode ist **sofort** aktiv, inklusive fertigem DM-Text zum Kopieren.
 - **Live-Übersicht:** wird alle 4 Sekunden aktualisiert. Zeigt für jeden Club die aktuelle Station, den Fortschritt, wann er zuletzt aktiv war, die Zielzeit und den Platz, dazu einen Verlauf „Was gerade passiert“.
 - **Hilfe vor Ort:** alle Codes eines Clubs anzeigen, Fortschritt zurücksetzen oder Club löschen.
+- **Testmodus** per Schalter ein- und ausschalten. Jede Änderung erscheint mit Namen im Verlauf.
 
 ## 🔒 Schutz vor Schummeln
 
@@ -32,7 +33,7 @@ Unter **`/admin/`** melden sich Eventleiter mit ihrem Namen und dem gemeinsamen 
 - Tresorcodes sind **je Club verschieden**. Abschreiben bei anderen Clubs bringt nichts.
 - Das Admin-Passwort liegt nur als Hash in `/etc/winterevent/config.php` auf dem Server, nie im Repo.
 
-> 🧪 **Testmodus:** Solange in der Server-Konfiguration `test_tools => true` steht, zeigt die Spielseite angemeldeten Admins (nur in deren Browser) einen Knopf „Test: Lösung“. Vor dem Event auf `false` setzen.
+> 🧪 **Testmodus:** Im Admin-Bereich ein- und ausschaltbar. Solange er an ist, zeigt die Spielseite angemeldeten Admins (nur in deren Browser) einen Knopf „Test: Lösung“. Vor dem Event ausschalten.
 
 ## Installation auf dem Server (nginx + PHP)
 

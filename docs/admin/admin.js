@@ -26,7 +26,7 @@
   function showView() {
     const on = !!auth;
     $('#loginView').hidden = on; $('#dash').hidden = !on; $('#who').hidden = !on;
-    if (on) { $('#whoName').textContent = auth.name; $('#testInfo').hidden = !auth.testTools; poll(); }
+    if (on) { $('#whoName').textContent = auth.name; renderTest(); poll(); }
     else { clearTimeout(timer); }
   }
   $('#loginForm').addEventListener('submit', async (e) => {
@@ -64,13 +64,34 @@
 
   // ---------- Live-Daten ----------
   async function load() {
-    try { data = await api('admin_overview'); failing = 0; $('#liveDot').classList.remove('off'); render(); }
+    try { data = await api('admin_overview'); failing = 0; $('#liveDot').classList.remove('off'); setTest(data.testTools); render(); }
     catch (err) { if (err.status === 401) return logoutExpired(); failing++; $('#liveDot').classList.add('off'); $('#updated').textContent = 'Verbindung unterbrochen …'; }
   }
   async function poll() { clearTimeout(timer); await load(); if (auth) timer = setTimeout(poll, document.hidden ? 15000 : 4000); }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && auth) poll(); });
 
-  const evText = { created: 'wurde angelegt', unlock: 'hat freigeschaltet:', solved: 'hat das Spiel gelöst:', opened: 'hat den Tresor geöffnet:', finish: '🏁 ist im Ziel!', reset: 'wurde zurückgesetzt' };
+  // ---------- Testmodus ----------
+  function setTest(on) {
+    if (!auth || auth.testTools === on) return renderTest();
+    auth.testTools = on; localStorage.setItem(STORE, JSON.stringify(auth)); renderTest();
+  }
+  function renderTest() {
+    const on = !!auth?.testTools;
+    $('#testToggle').setAttribute('aria-checked', String(on));
+    $('#testCard').classList.toggle('on', on);
+    $('#testText').innerHTML = on
+      ? '<b>An.</b> Angemeldete Admins sehen auf der Spielseite an jeder Station den Knopf „Test: Lösung“. Spieler sehen ihn nie. <b>Vor dem Event ausschalten.</b>'
+      : '<b>Aus.</b> Niemand kann Stationen per Knopf lösen. So soll es während des Events sein.';
+  }
+  $('#testToggle').addEventListener('click', async () => {
+    const btn = $('#testToggle'), next = !auth.testTools;
+    btn.disabled = true;
+    try { const r = await api('admin_set_test', { on: next }); setTest(r.testTools); toast(r.testTools ? 'Testmodus an' : 'Testmodus aus'); load(); }
+    catch (err) { if (err.status === 401) return logoutExpired(); toast(err.message); }
+    btn.disabled = false;
+  });
+
+  const evText = { test_on: '🧪 Testmodus eingeschaltet', test_off: '🧪 Testmodus ausgeschaltet', created: 'wurde angelegt', unlock: 'hat freigeschaltet:', solved: 'hat das Spiel gelöst:', opened: 'hat den Tresor geöffnet:', finish: '🏁 ist im Ziel!', reset: 'wurde zurückgesetzt' };
   function render() {
     const T = data.teams, n = data.count;
     const fin = T.filter((t) => t.finishedAt).length, started = T.filter((t) => t.stage >= 0 && !t.finishedAt).length;
@@ -90,7 +111,8 @@
           <button class="ghost sm danger" data-act="del" data-id="${t.id}">Löschen</button></span></td></tr>`;
     }).join('') : `<tr><td colspan="7" class="empty">Noch keine Clubs. Leg oben den ersten an.</td></tr>`;
     $('#feed').innerHTML = data.events.length ? data.events.map((e) =>
-      `<li><time>${time(e.at)}</time><span><b>${esc(e.team || 'gelöschter Club')}</b> ${evText[e.type] || e.type} ${['unlock', 'solved', 'opened'].includes(e.type) ? esc(e.station) : ''}</span></li>`).join('')
+      e.type.startsWith('test_') ? `<li><time>${time(e.at)}</time><span>${evText[e.type]} von <b>${esc(e.info)}</b></span></li>`
+      : `<li><time>${time(e.at)}</time><span><b>${esc(e.team || 'gelöschter Club')}</b> ${evText[e.type] || e.type} ${['unlock', 'solved', 'opened'].includes(e.type) ? esc(e.station) : ''}</span></li>`).join('')
       : '<li class="empty">Noch nichts passiert.</li>';
     $('#updated').textContent = `aktualisiert ${time(data.now)} · alle 4 s`;
   }

@@ -60,7 +60,12 @@ td.code { font: 700 .95rem var(--mono); color: var(--gold-2); }
 .feed li { display: grid; grid-template-columns: 74px 1fr; gap: 10px; font-size: .88rem; }
 .feed time { color: var(--muted); font: 500 .8rem var(--mono); }
 .empty { color: var(--muted); text-align: center; padding: 22px; }
-.test { border-color: rgba(255,200,97,.45); }
+.test.on { border-color: rgba(255,200,97,.55); }
+.switch { position: relative; width: 54px; height: 30px; padding: 0; border-radius: 999px; background: rgba(143,160,194,.3); border: 1px solid var(--line-hi); transition: background .2s; }
+.switch span { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--frost); transition: transform .2s; }
+.switch[aria-checked="true"] { background: var(--warn); border-color: var(--warn); }
+.switch[aria-checked="true"] span { transform: translateX(24px); background: #1b1304; }
+.switch:disabled { opacity: .5; }
 code { font-family: var(--mono); background: var(--ink-2); padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); }
 dialog { background: var(--card); color: var(--frost); border: 1px solid var(--line-hi); border-radius: 16px; padding: 20px; width: min(560px, calc(100% - 32px)); }
 dialog::backdrop { background: rgba(0,0,0,.6); }

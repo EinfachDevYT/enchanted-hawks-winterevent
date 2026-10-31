@@ -129,7 +129,7 @@ Das Skript fragt beim ersten Mal:
 
 Es legt `/etc/winterevent/config.php` (Einstellungen) und `/var/lib/winterevent/` (Datenbank) an und fügt in die nginx-Konfiguration eine `include`-Zeile ein. Die HTTPS-Einstellungen von certbot bleiben dabei unangetastet, und vorher wird eine Sicherungskopie angelegt. Mehrfach ausführen ist ungefährlich.
 
-> 🧪 Nach der Einrichtung ist der **Testmodus** an (`'test_tools' => true` in `/etc/winterevent/config.php`). Angemeldete Admins sehen dann auf der Spielseite einen Knopf „Test: Lösung“. **Vor dem Event** in der Datei auf `false` ändern und `sudo systemctl reload php*-fpm` ausführen.
+> 🧪 Nach der Einrichtung ist der **Testmodus** an. Angemeldete Admins sehen dann auf der Spielseite einen Knopf „Test: Lösung“. Ein- und ausschalten geht im **Admin-Bereich** (Schalter „Testmodus“). **Vor dem Event ausschalten.**
 
 ## Schritt 6: Testen
 

@@ -12,6 +12,8 @@ const fresh = () => ({ token: null, view: 0 });
 let state = (() => { try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && 'token' in s) return { ...fresh(), ...s }; } catch (_) {} return fresh(); })();
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (_) {} };
 const adminToken = () => { try { return JSON.parse(localStorage.getItem(ADMIN_STORE) || 'null')?.admin || null; } catch (_) { return null; } };
+// Test-Knopf nur, wenn ein Admin angemeldet ist UND der Testmodus im Admin-Bereich an ist
+const testOn = () => { try { const a = JSON.parse(localStorage.getItem(ADMIN_STORE) || 'null'); return !!(a?.admin && a.testTools); } catch (_) { return false; } };
 async function api(a, data = {}) {
   let r;
   try { r = await fetch('/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ a, token: state.token, ...data }) }); }
@@ -335,7 +337,7 @@ function renderStation(k) {
   el.querySelector('#backBtn').onclick = backToMap;
   const cta = () => {
     const solved = k === 0 || gameOf(k)?.solved;
-    const test = adminToken() ? `<button class="btn ghost sm" id="testBtn" title="Nur für Admins sichtbar">🧪 Test: Lösung</button>` : '';
+    const test = testOn() ? `<button class="btn ghost sm" id="testBtn" title="Nur für Admins sichtbar">🧪 Test: Lösung</button>` : '';
     $('#ctaRow').innerHTML = (opened
       ? `<button class="btn" id="vaultBtn">Tresor ansehen <span class="arrow">→</span></button>`
       : solved
