@@ -106,12 +106,22 @@ function codeBox({ id, placeholder, button, numeric }) {
 
 $('#fsBtn').addEventListener('click', () => {
   const el = document.documentElement;
-  if (!document.fullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
-  else (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+  try {
+    const r = !document.fullscreenElement ? (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el) : (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    r?.catch?.(() => toast('Vollbild wird hier nicht unterstützt.'));
+  } catch (_) { toast('Vollbild wird hier nicht unterstützt.'); }
 });
+let logoutArmed = null;
 $('#logoutBtn').addEventListener('click', () => {
-  if (!confirm('Abmelden? Der Fortschritt auf diesem Gerät wird gelöscht. Mit eurem letzten Ortscode könnt ihr jederzeit weitermachen.')) return;
-  localStorage.removeItem(STORE); state = fresh(); for (const k in payloads) delete payloads[k];
+  if (!logoutArmed) {
+    toast('Nochmal tippen zum Abmelden. Euer Fortschritt auf diesem Gerät wird gelöscht.');
+    $('#logoutBtn').style.borderColor = 'var(--danger)';
+    logoutArmed = setTimeout(() => { logoutArmed = null; $('#logoutBtn').style.borderColor = ''; }, 3500);
+    return;
+  }
+  clearTimeout(logoutArmed); logoutArmed = null; $('#logoutBtn').style.borderColor = '';
+  try { localStorage.removeItem(STORE); } catch (_) {}
+  state = fresh(); for (const k in payloads) delete payloads[k];
   stage?.setMode('ambient'); renderIntro();
 });
 
