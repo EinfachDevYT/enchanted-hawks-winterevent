@@ -64,7 +64,7 @@
 
   // ---------- 2) Screen-Detektiv ----------
   const SCENE_OBJECTS = [
-    { id: 'falke', label: 'Falke', x: 152, y: 168 },
+    { id: 'falke', label: 'Falke', x: 671, y: 77, r: 13 }, // dunkle Silhouette vor dem Mond
     { id: 'hufeisen', label: 'Hufeisen', x: 612, y: 248 },
     { id: 'laterne', label: 'Laterne', x: 352, y: 268 },
     { id: 'geschenk', label: 'Geschenk', x: 742, y: 366 },
@@ -83,6 +83,7 @@
       </defs>
       <rect width="800" height="450" fill="url(#sky)"/>${stars}
       <circle cx="680" cy="70" r="30" fill="#fff8de"/><circle cx="692" cy="62" r="28" fill="#2a1659" opacity=".25"/>
+      <g transform="translate(660 69.5) scale(.34)" style="color:#1b0f3d" opacity=".9"><use href="#hawk-shape" width="64" height="44"/></g>
       <path d="M0 250 120 170 220 230 330 150 460 230 560 160 680 220 800 170V300H0z" fill="#5a4a9a" opacity=".7"/>
       <path d="M330 150 352 168 340 170 312 165zM560 160 585 178 570 180 540 176z" fill="#fff" opacity=".7"/>
       <path d="M0 300C120 280 240 310 400 296S680 280 800 300V450H0z" fill="url(#snowg)"/>
@@ -103,7 +104,6 @@
       <!-- Schneemann -->
       <circle cx="610" cy="390" r="30" fill="#f7f9ff"/><circle cx="610" cy="346" r="20" fill="#f7f9ff"/><circle cx="604" cy="342" r="2.5"/><circle cx="616" cy="342" r="2.5"/><path d="M610 348l12 3-12 2z" fill="#f28a1e"/><path d="M592 360h36" stroke="#e86bd0" stroke-width="6"/>
       <!-- versteckte Gegenstände -->
-      <g opacity=".9"><g transform="translate(140 158) scale(.38)" style="color:#2a1659"><use href="#hawk-shape" width="64" height="44"/></g></g>
       <g transform="translate(603 238) scale(.3)" opacity=".75">${ICONS.hufeisen.replace(/<\/?svg[^>]*>/g, '')}</g>
       <g transform="translate(343 256) scale(.3)">${ICONS.laterne.replace(/<\/?svg[^>]*>/g, '')}</g>
       <g transform="translate(728 352) scale(.42)">${ICONS.geschenk.replace(/<\/?svg[^>]*>/g, '')}</g>
@@ -131,8 +131,8 @@
       if (found.size === objs.length) return;
       const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
       const p = pt.matrixTransform(svg.getScreenCTM().inverse());
-      const rad = Math.max(26, 18 * (800 / svg.getBoundingClientRect().width));
-      const hit = objs.find((o) => !found.has(o.id) && Math.hypot(o.x - p.x, o.y - p.y) < rad);
+      const k = 800 / svg.getBoundingClientRect().width; // auf kleinen Bildschirmen größere Trefferzone
+      const hit = objs.find((o) => !found.has(o.id) && Math.hypot(o.x - p.x, o.y - p.y) < Math.max(o.r || 26, (o.r ? 11 : 18) * k));
       if (hit) {
         found.add(hit.id); render();
         if (found.size === objs.length) onDone();
