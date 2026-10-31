@@ -73,6 +73,7 @@ async function show(name, { mapVisible = false, introBg = false } = {}) {
   gsap.to('#bgIntro', { autoAlpha: introBg ? 1 : 0, duration: 0.8 });
   gsap.to(['#mapStage', '#mapNodes'], { autoAlpha: mapVisible ? 1 : 0, duration: 0.6 });
   $('#mapNodes').classList.toggle('on', name === 'map');
+  if (name === 'station') stage?.setMode('paused'); // Schnee ist hinter der Station kaum sichtbar – Grafikkarte entlasten
   next.classList.add('active');
   next.scrollTop = 0;
   currentScreen = name;
