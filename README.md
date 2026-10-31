@@ -47,10 +47,10 @@ node tools/build.mjs                              # erzeugt docs/data.js + CODES
 Die Position jeder Station steht in `stations[].map` (Pixel auf `docs/img/jorvik-karte.webp`, 1209 × 1180).
 **Nilmers Hochland ist geschätzt.** Bitte bei Bedarf anpassen. Die Position des Weihnachtsbaums steht in `winterMap.tree`.
 
-## Veröffentlichen (GitHub Pages)
+## Installation auf dem eigenen Server (nginx)
 
-Settings → Pages → *Deploy from a branch* → Branch `main`, Ordner **`/docs`**.
-Die Seite ist danach unter `https://einfachdevyt.github.io/enchanted-hawks-winterevent/` erreichbar.
+Die Website besteht nur aus statischen Dateien in `docs/`. Auf dem Server läuft **kein Node.js**, nginx liefert die Dateien direkt aus.
+Fertige Konfiguration, Update-Skript und Schritt-für-Schritt-Anleitung (DNS, nginx, HTTPS mit Let's Encrypt): **[deploy/README.md](deploy/README.md)**
 
 Lokal testen: `cd docs && python3 -m http.server 8000` → http://localhost:8000
 

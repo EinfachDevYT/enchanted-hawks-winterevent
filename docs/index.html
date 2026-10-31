@@ -7,10 +7,10 @@
   <meta name="theme-color" content="#05070f">
   <title>Schnitzeljagd durch Jorvik</title>
   <meta name="description" content="Enchanted Hawks Winterevent – Schnitzeljagd durch Jorvik">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%E2%9D%84%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <link rel="icon" type="image/webp" href="img/logo-mark.webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=JetBrains+Mono:wght@500;700&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@400&family=JetBrains+Mono:wght@500;700&family=Manrope:wght@400;500;700;800&family=Oswald:wght@700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
@@ -30,10 +30,13 @@
     <div class="map-nodes" id="mapNodes"></div>
 
     <header class="hud" id="hud">
-      <div class="brand">
-        <svg class="crest" viewBox="0 0 64 64" aria-hidden="true"><use href="#crest"/></svg>
-        <div><b>Enchanted Hawks</b><span>Winterevent</span></div>
-      </div>
+      <a class="brand" href="https://enchantedhawks.eu" target="_blank" rel="noopener" aria-label="Enchanted Hawks – zur Clubseite">
+        <img src="img/logo-mark.webp" alt="" class="brand-logo" width="40" height="40">
+        <span class="brand-text">
+          <span class="brand-name">Enchanted Hawks</span>
+          <span class="brand-tag">Star Stable Online Club</span>
+        </span>
+      </a>
       <div class="hud-right">
         <div class="team" id="team" hidden><i></i><span id="teamName"></span></div>
         <button class="icon-btn" id="fsBtn" title="Vollbild" aria-label="Vollbild umschalten"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
