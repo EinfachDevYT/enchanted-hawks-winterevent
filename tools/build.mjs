@@ -106,25 +106,33 @@ cfg.teams.forEach((team, i) => {
 const salt = REGENERATE || !cfg._salt ? randChars(16) : cfg._salt;
 cfg._salt = salt;
 const morlandAnswer = cfg.morland.riddles.map((r) => r.digit).join('');
+// Infos zu einem Ort – landen NUR verschlüsselt in den Daten (erst sichtbar, wenn der Ort freigeschaltet bzw. verraten ist)
+const info = (k) => {
+  const { id, name, game, title, intro, nextHint, map, labelPos, arrive } = stations[k];
+  const o = { id, name, game, title, intro, nextHint, map, labelPos, arrive };
+  if (k === LAST && cfg.winterMap) o.winterMap = cfg.winterMap;
+  return o;
+};
 const entries = [];
 
 for (const [ti, team] of cfg.teams.entries()) {
   const codes = team.codes;
   for (let k = 0; k <= LAST; k++) {
     const st = stations[k];
-    const payload = { team: team.name, teamIndex: ti, stage: k };
+    const payload = { team: team.name, teamIndex: ti, stage: k, station: info(k), trail: stations.slice(0, k).map((_, j) => info(j)) };
     if (k === LAST) {
       payload.zielcode = codes.zielcode;
     } else {
       const answer = k === 0 ? morlandAnswer : codes.tresor[st.id];
       if (k > 0) payload.answer = answer;
       if (st.game === 'wordscramble') payload.words = cfg.wordscramble.map((w) => ({ word: norm(w.word), hint: w.hint }));
-      if (k === 0 && cfg.morland.mode === 'web') {
+      if (k === 0) payload.riddleTexts = cfg.morland.riddles.map((r) => r.text);
+        if (k === 0 && cfg.morland.mode === 'web') {
         payload.riddles = cfg.morland.riddles.map((r) => ({ accept: r.accept.map(norm), digit: r.digit, place: r.place }));
       }
       const vaultSalt = `${salt}|tresor|${randChars(10)}`;
       const vk = await derive(answer, vaultSalt);
-      payload.vault = { salt: vaultSalt, ...(await seal(vk.key, { nextCode: codes.stationCodes[k + 1] })) };
+      payload.vault = { salt: vaultSalt, ...(await seal(vk.key, { nextCode: codes.stationCodes[k + 1], next: info(k + 1) })) };
     }
     const { key, id } = await derive(codes.stationCodes[k], salt);
     entries.push([id, await seal(key, payload)]);
@@ -132,18 +140,17 @@ for (const [ti, team] of cfg.teams.entries()) {
 }
 
 const publicData = {
+  v: 2,
   eventName: cfg.eventName,
   clubName: cfg.clubName,
   subtitle: cfg.subtitle,
   iterations: ITERATIONS,
   salt,
   morlandMode: cfg.morland.mode,
-  riddles: cfg.morland.riddles.map((r) => r.text),
   mapImage: cfg.mapImage,
   mapSize: cfg.mapSize,
-  winterMap: cfg.winterMap,
   mapView: cfg.mapView,
-  stations: stations.map(({ id, name, game, title, intro, nextHint, map, mapNote, labelPos }) => ({ id, name, game, title, intro, nextHint, map, mapNote, labelPos })),
+  count: stations.length, // nur die Anzahl ist öffentlich – keine Namen, keine Positionen
   entries: Object.fromEntries(shuffle(entries)),
 };
 

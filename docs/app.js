@@ -1,8 +1,10 @@
 // Schnitzeljagd durch Jorvik – Hauptlogik (Vollbild-Screens, Karte, Tresor-Sequenz)
 const gsap = window.gsap;
 const D = window.EVENT_DATA;
-const S = D.stations;
-const LAST = S.length - 1;
+const COUNT = D.count;
+const LAST = COUNT - 1;
+// Infos zu einem Ort sind erst bekannt, wenn er freigeschaltet bzw. vom Tresor davor verraten wurde
+const si = (k) => (state.known && state.known[k]) || null;
 const STORE = 'ehw-winterevent-v2';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -34,7 +36,7 @@ async function openVault(vault, answer) {
 }
 
 // ============ Zustand ============
-const fresh = () => ({ team: null, codes: {}, opened: {}, solved: {}, riddleDigits: {}, finishedAt: null, view: 0 });
+const fresh = () => ({ team: null, codes: {}, opened: {}, solved: {}, riddleDigits: {}, known: {}, finishedAt: null, view: 0 });
 let state = (() => { try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && s.codes) return { ...fresh(), ...s }; } catch (_) {} return fresh(); })();
 const payloads = {};
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (_) {} };
@@ -47,8 +49,14 @@ function status(k) {
   return 'locked';
 }
 const focusStage = () => { const m = maxStage(); return m >= 0 && state.opened[m] && m < LAST ? m + 1 : Math.max(0, m); };
+function learn(p) {
+  state.known = state.known || {};
+  (p.trail || []).forEach((t, j) => { if (!state.known[j]) state.known[j] = t; });
+  if (p.station) state.known[p.stage] = p.station;
+}
 function adopt(p, code) {
   if (state.team && state.team !== p.team) state = fresh();
+  learn(p);
   state.team = p.team;
   state.codes[p.stage] = code;
   for (let k = 0; k < p.stage; k++) if (!state.opened[k]) state.opened[k] = '✓';
@@ -100,7 +108,7 @@ function updateHud() {
   $('#logoutBtn').hidden = !state.team;
   const p = $('#progress');
   p.hidden = !state.team || currentScreen === 'intro';
-  p.innerHTML = S.map((s, k) => { const st = status(k); return `<span class="${st === 'done' ? 'done' : st === 'current' || st === 'ready' ? 'current' : ''}" title="${esc(s.name)}"></span>`; }).join('');
+  p.innerHTML = Array.from({ length: COUNT }, (_, k) => { const st = status(k); return `<span class="${st === 'done' ? 'done' : st === 'current' || st === 'ready' ? 'current' : ''}" title="${esc(si(k)?.name || 'Unbekannter Ort')}"></span>`; }).join('');
 }
 function codeBox({ id, placeholder, button, numeric }) {
   return `<form class="codebox" id="${id}" autocomplete="off">
@@ -136,11 +144,11 @@ function renderIntro() {
   el.innerHTML = `<div class="intro">
     <div class="eyebrow" data-rise>${esc(D.clubName)} · ${esc(D.subtitle)}</div>
     <h1 class="display" id="introTitle"><span class="line">${chars('Schnitzeljagd')}</span><span class="line"><em>${chars('durch Jorvik')}</em></span></h1>
-    <p class="lead" data-rise>Sechs Orte. Fünf Tresore. Ein Weihnachtsbaum am Ende der Reise. Gebt euren Teamcode ein, den ihr von der Eventleitung per DM bekommen habt.</p>
+    <p class="lead" data-rise>Rätsel, Minispiele und verschlossene Tresore quer durch Jorvik. Jeder Tresor verrät euch erst das nächste Ziel. Gebt euren Teamcode ein, den ihr von der Eventleitung per DM bekommen habt.</p>
     <div data-rise style="width:min(560px,100%)">${codeBox({ id: 'loginForm', placeholder: 'Teamcode', button: 'Losreiten' })}<div class="msg" id="loginMsg"></div></div>
     <div class="intro-steps" data-rise>
       <div><b>01</b>Teamcode eingeben</div><div><b>02</b>Rätsel und Minispiele lösen</div>
-      <div><b>03</b>Tresor knacken und den nächsten Ortscode finden</div><div><b>04</b>Als Erste am Weihnachtsbaum sein</div>
+      <div><b>03</b>Tresor knacken und den nächsten Ortscode finden</div><div><b>04</b>Als Erste das Ziel erreichen</div>
     </div></div>`;
   show('intro', { introBg: true });
   const title = $('#introTitle');
@@ -175,25 +183,28 @@ function layoutMap() {
 }
 function routeD(a, b, i) {
   if (i === LAST - 1) {
-    const m = S[0].map;
+    const m = si(0)?.map || a;
     return `M${a.x} ${a.y} Q${(a.x + m.x) / 2 - 30} ${(a.y + m.y) / 2} ${m.x} ${m.y} C ${m.x - 380} ${m.y - 200}, ${b.x - 330} ${b.y + 260}, ${b.x - 70} ${b.y + 80}`;
   }
   const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, dx = b.x - a.x, dy = b.y - a.y;
   return `M${a.x} ${a.y} Q${mx - dy * 0.25} ${my + dx * 0.25} ${b.x} ${b.y}`;
 }
 function renderNodes(animateRoute) {
-  const [W, H] = D.mapSize, wm = D.winterMap, s = mapRect.s;
-  const wp = S[LAST].map, insetD = Math.max(110, 240 * s);
-  const routes = S.slice(0, LAST).map((_, i) => {
-    const d = routeD(S[i].map, S[i + 1].map, i), on = status(i + 1) !== 'locked';
-    return `<path class="r-bg" d="${d}" vector-effect="non-scaling-stroke"/>${on ? `<path class="r-done" data-i="${i}" d="${d}"/>` : ''}`;
+  const [W, H] = D.mapSize, s = mapRect.s, fin = si(LAST);
+  const insetD = Math.max(110, 240 * s);
+  // Nur Wege zwischen bereits bekannten Orten zeichnen – die Zukunft bleibt im Nebel
+  const routes = Array.from({ length: LAST }, (_, i) => {
+    if (!si(i) || !si(i + 1) || status(i + 1) === 'locked') return '';
+    const d = routeD(si(i).map, si(i + 1).map, i);
+    return `<path class="r-bg" d="${d}" vector-effect="non-scaling-stroke"/><path class="r-done" data-i="${i}" d="${d}"/>`;
   }).join('');
+  const known = Array.from({ length: COUNT }, (_, k) => k).filter((k) => si(k) && status(k) !== 'locked');
   $('#mapNodes').innerHTML = `
     <svg class="routes" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${routes}</svg>
-    <div class="winter-inset" style="left:${(wp.x / W) * 100}%;top:${(wp.y / H) * 100}%;width:${insetD}px;height:${insetD}px"><img src="${wm.image}" alt=""></div>
-    ${S.map((st, k) => {
-      const stt = status(k), p = st.map;
-      const y = k === LAST ? p.y + insetD / 2 / s : p.y;
+    ${fin && fin.winterMap && status(LAST) !== 'locked' ? `<div class="winter-inset" style="left:${(fin.map.x / W) * 100}%;top:${(fin.map.y / H) * 100}%;width:${insetD}px;height:${insetD}px"><img src="${fin.winterMap.image}" alt=""></div>` : ''}
+    ${known.map((k) => {
+      const st = si(k), stt = status(k), p = st.map;
+      const y = st.winterMap ? p.y + insetD / 2 / s : p.y;
       const icon = stt === 'done' ? '<svg><use href="#check"/></svg>' : stt === 'locked' ? '<svg><use href="#lock"/></svg>' : `<span class="num">${k + 1}</span>`;
       return `<button class="node ${stt} ${st.labelPos === 'right' ? 'right' : ''}" data-k="${k}" style="left:${(p.x / W) * 100}%;top:${(y / H) * 100}%" aria-label="${esc(st.name)}">
         <span class="dot">${icon}</span><span class="label">${esc(st.name)}</span></button>`;
@@ -210,16 +221,16 @@ function renderNodes(animateRoute) {
   });
 }
 function renderMapCard(animate) {
-  const k = state.view ?? focusStage(), st = S[k], stt = status(k);
+  const k = state.view ?? focusStage(), st = si(k) || { name: 'Unbekannter Ort', intro: '' }, stt = status(k);
   const heads = { done: 'Geschafft', current: 'Aktuelle Station', ready: 'Nächstes Ziel' };
   const texts = {
     done: k === LAST ? 'Ihr habt das Ziel erreicht!' : 'Diesen Ort habt ihr bereits gemeistert.',
     current: st.intro,
-    ready: k === LAST ? 'Nehmt den Moorland-Schlitten ins Winterdorf und reitet zum Weihnachtsbaum. Dort schaltet ihr das Ziel mit eurem Ortscode frei.' : `Reitet im Spiel nach ${st.name} und schaltet den Ort mit eurem Ortscode aus dem Tresor frei.`,
+    ready: `${st.arrive || `Reitet im Spiel nach ${st.name}.`} Dort schaltet ihr den Ort mit eurem Ortscode aus dem Tresor frei.`,
   };
   const btn = { done: 'Ansehen', current: 'Station betreten', ready: 'Ort freischalten' }[stt];
   $('#sMap').innerHTML = `<div class="map-card" id="mapCard">
-    <div class="eyebrow">${heads[stt]} · ${k + 1} / ${S.length}</div>
+    <div class="eyebrow">${heads[stt]} · ${k + 1} / ${COUNT}</div>
     <h2 class="display">${esc(st.name)}</h2>
     <p class="lead">${esc(texts[stt])}</p>
     <button class="btn" id="enterBtn">${btn} <span class="arrow">→</span></button></div>`;
@@ -247,7 +258,8 @@ addEventListener('resize', () => { if (currentScreen === 'map') { layoutMap(); r
 
 async function zoomTo(k) {
   if (reduce) return;
-  const p = S[k].map, s = mapRect.s, z = 2.4;
+  if (!si(k)) return;
+  const p = si(k).map, s = mapRect.s, z = 2.4;
   const x = innerWidth / 2 - mapRect.left - p.x * s * z, y = innerHeight / 2 - mapRect.top - p.y * s * z;
   gsap.to(['#sMap', '#progress'], { autoAlpha: 0, duration: 0.3 });
   await gsap.to(['#mapStage', '#mapNodes'], { x: x - 0, y, scale: z, transformOrigin: '0 0', duration: 1.1, ease: 'power3.inOut' });
@@ -266,14 +278,14 @@ async function enterStation(k) {
 const backToMap = () => goMap();
 
 function renderArrive(k) {
-  const st = S[k], isW = k === LAST, wm = D.winterMap;
+  const st = si(k) || { name: 'Nächster Ort' }, wm = st.winterMap;
   const el = screens.station;
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← Karte</button>
     <div class="arrive">
       <div class="eyebrow" data-rise>Nächstes Ziel · Station ${k + 1}</div>
       <h2 class="display" data-rise>${esc(st.name)}</h2>
-      ${isW ? `<div class="arrive-map" data-rise><img src="${wm.image}" alt="Karte vom Winterdorf"><span class="pin" style="left:${(wm.tree[0] / wm.size[0]) * 100}%;top:${(wm.tree[1] / wm.size[1]) * 100}%"></span></div>` : ''}
-      <p class="lead" data-rise>${isW ? 'Nehmt den <b>Moorland-Schlitten</b> ins Winterdorf und reitet zum leuchtenden <b>Weihnachtsbaum</b>.' : `Reitet im Spiel nach <b>${esc(st.name)}</b>.`} Angekommen? Dann gebt euren Ortscode aus dem Tresor ein.</p>
+      ${wm ? `<div class="arrive-map" data-rise><img src="${wm.image}" alt="Karte von ${esc(st.name)}"><span class="pin" style="left:${(wm.tree[0] / wm.size[0]) * 100}%;top:${(wm.tree[1] / wm.size[1]) * 100}%"></span></div>` : ''}
+      <p class="lead" data-rise>${esc(st.arrive || `Reitet im Spiel nach ${st.name}.`)} Angekommen? Dann gebt euren Ortscode aus dem Tresor ein.</p>
       <div data-rise style="width:min(560px,100%)">${codeBox({ id: 'unlockForm', placeholder: 'Ortscode', button: 'Freischalten' })}<div class="msg" id="unlockMsg"></div></div>
     </div>`;
   show('station', { mapVisible: true }); rise(el);
@@ -296,7 +308,7 @@ function renderArrive(k) {
 
 function renderRiddles(el, p) {
   const web = D.morlandMode === 'web';
-  el.innerHTML = `<div class="riddles">${D.riddles.map((r, i) => `
+  el.innerHTML = `<div class="riddles">${(p.riddleTexts || []).map((r, i) => `
     <div class="riddle"><div class="nr"><b>${i + 1}</b>ZAHL</div><p>„${esc(r)}“</p>
     ${web ? (state.riddleDigits[i] != null ? `<div class="digit-badge">✓ ${esc(p.riddles[i].place)}: ${esc(state.riddleDigits[i])}</div>`
       : `<form class="place-row" data-i="${i}"><input placeholder="Welcher Ort?" aria-label="Ort für Rätsel ${i + 1}"><button class="btn sm ice">Prüfen</button></form>`) : ''}
@@ -311,7 +323,7 @@ function renderRiddles(el, p) {
 }
 
 function renderStation(k) {
-  const st = S[k], p = payloads[k], el = screens.station, stt = status(k);
+  const p = payloads[k], st = si(k) || p?.station || { name: 'Station ' + (k + 1) }, el = screens.station, stt = status(k);
   if (!p) {
     el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← Karte</button><div class="arrive"><div class="eyebrow">Station ${k + 1}</div><h2 class="display">${esc(st.name)}</h2><p class="lead">Diese Station habt ihr bereits geschafft.</p></div>`;
     $('#backBtn').onclick = backToMap; return show('station', { mapVisible: true });
@@ -320,7 +332,7 @@ function renderStation(k) {
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← Karte</button>
     <div class="station">
       <aside class="station-side">
-        <div class="eyebrow" data-rise>Station ${k + 1} / ${S.length}</div>
+        <div class="eyebrow" data-rise>Station ${k + 1} / ${COUNT}</div>
         <h2 class="display" data-rise>${esc(st.name)}</h2>
         <p class="lead" data-rise>${esc(st.intro)}</p>
         <div class="tag" data-rise>${stt === 'done' ? '✓ geschafft' : '◆ ' + esc(st.title)}</div>
@@ -350,7 +362,7 @@ function renderStation(k) {
 
 // ============ Tresor ============
 async function enterVault(k) {
-  const st = S[k], p = payloads[k], el = screens.vault;
+  const st = si(k), p = payloads[k], el = screens.vault;
   const opened = state.opened[k] && state.opened[k] !== '✓' ? state.opened[k] : null;
   stage?.setMode('vault', { open: !!opened });
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← ${esc(st.name)}</button>
@@ -366,7 +378,8 @@ async function enterVault(k) {
   const shown = show('vault');
   if (opened) { await shown; return showReveal(k, opened, false); }
   const f = $('#vaultForm'), input = f.code;
-  if (k === 0 && D.riddles.every((_, i) => state.riddleDigits[i] != null)) input.value = D.riddles.map((_, i) => state.riddleDigits[i]).join('');
+  const rt = p.riddleTexts || [];
+  if (k === 0 && rt.length && rt.every((_, i) => state.riddleDigits[i] != null)) input.value = rt.map((_, i) => state.riddleDigits[i]).join('');
   let lastLen = input.value.length;
   input.addEventListener('input', () => { stage?.tick(input.value.length >= lastLen ? 1 : -1); lastLen = input.value.length; });
   if (!reduce) gsap.from('#vaultUi > *', { y: 30, autoAlpha: 0, duration: 0.9, ease: 'power3.out', stagger: 0.08, delay: 0.7 });
@@ -383,7 +396,9 @@ async function enterVault(k) {
       setTimeout(() => f.classList.remove('err'), 1200);
       return;
     }
-    state.opened[k] = res.nextCode; save(); updateHud();
+    state.opened[k] = res.nextCode;
+    if (res.next) state.known[k + 1] = res.next; // erst jetzt wird das nächste Ziel bekannt
+    save(); updateHud();
     input.blur();
     msg.className = 'msg ok'; msg.textContent = 'Richtig!';
     await gsap.to('#vaultUi', { autoAlpha: 0, y: 30, duration: 0.5, ease: 'power2.in' });
@@ -397,7 +412,7 @@ async function enterVault(k) {
   });
 }
 function showReveal(k, code, animate) {
-  const next = S[k + 1], st = S[k];
+  const next = si(k + 1) || { name: 'den nächsten Ort' }, st = si(k) || {};
   const chars = [...code].map((c) => `<span class="${c === '-' ? 'sep' : ''}">${esc(c)}</span>`).join('');
   const r = $('#reveal');
   r.innerHTML = `<div class="reveal-card" id="revealCard">
@@ -438,9 +453,9 @@ function renderFinal(p) {
       <path d="M100 2l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z" fill="#ffdca0"/>
       ${lights.map(([x, y, c], i) => `<circle class="light" cx="${x}" cy="${y}" r="4.5" fill="${c}" style="animation-delay:${i * 0.2}s"/>`).join('')}
     </svg>
-    <div class="eyebrow" data-rise>Station ${LAST + 1} · Winterdorf</div>
+    <div class="eyebrow" data-rise>Station ${LAST + 1} · ${esc(si(LAST)?.name || 'Ziel')}</div>
     <h1 class="display" data-rise>Ziel <em>erreicht!</em></h1>
-    <p class="lead" data-rise>${esc(p.team)} hat den Weihnachtsbaum erreicht.</p>
+    <p class="lead" data-rise>${esc(p.team)} hat das Ziel erreicht.</p>
     <div class="stamp" data-rise>${t.toLocaleDateString('de-DE')} · ${t.toLocaleTimeString('de-DE')} Uhr</div>
     <div class="eyebrow" style="margin-top:14px" data-rise>Euer Zielcode</div>
     <div class="big-code" data-rise>${code}</div>
@@ -466,6 +481,7 @@ function confetti() {
 
 // ============ Start ============
 async function boot() {
+  if (!D.count || !D.entries) { screens.intro.innerHTML = '<div class="intro"><p class="lead">Die Spieldaten sind veraltet. Bitte mit dem aktuellen Code-Generator eine neue data.js erzeugen und hochladen.</p></div>'; return show('intro', { introBg: true }); }
   gsap.set(['#mapStage', '#mapNodes', '#bgIntro', '#toast'], { autoAlpha: 0 });
   if (lite) {
     let shown = false; try { shown = sessionStorage.getItem('ehw-lite-hint') === '1'; sessionStorage.setItem('ehw-lite-hint', '1'); } catch (_) {}
@@ -475,7 +491,7 @@ async function boot() {
   if (!state.team) return renderIntro();
   await Promise.all(Object.entries(state.codes).map(async ([k, code]) => {
     const p = await lookup(code);
-    if (p && p.team === state.team) payloads[k] = p; else delete state.codes[k];
+    if (p && p.team === state.team) { payloads[k] = p; learn(p); } else delete state.codes[k];
   }));
   if (!Object.keys(state.codes).length) { state = fresh(); save(); return renderIntro(); }
   save();

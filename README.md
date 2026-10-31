@@ -3,7 +3,7 @@
 Interaktive Vollbild-Website für die Winter-Schnitzeljagd der Enchanted Hawks.
 Jedes Team spielt mit **eigenen Codes** in seinem eigenen Tempo. Gelöste Rätsel öffnen einen **3D-Tresor**, der den Ortscode für die nächste Station verrät.
 
-**Route:** Moorland (Code-Suche) → Doyles Abbey (Karten-Klick) → Silverglade Village (Screen-Detektiv) → Nilmers Hochland (Buchstabensalat) → Silverglade-Schloss (Schiebepuzzle) → Winterdorf (Ziel am Weihnachtsbaum)
+Sechs Stationen mit Rätseln und Minispielen (Memory, Suchbild, Buchstabensalat, Schiebepuzzle). Die Route bleibt geheim: Jeder Ort wird erst sichtbar, wenn der Tresor davor geöffnet ist.
 
 ## So läuft es für die Teams
 
@@ -11,14 +11,14 @@ Jedes Team spielt mit **eigenen Codes** in seinem eigenen Tempo. Gelöste Rätse
 2. An jeder Station gibt es ein Rätsel oder Minispiel. Die Lösung ist der **Tresorcode**.
 3. Der Tresor öffnet sich und zeigt den **Ortscode** für den nächsten Ort.
 4. Das Team reitet im Spiel dorthin und schaltet den Ort mit dem Ortscode frei.
-5. Am Weihnachtsbaum im Winterdorf gibt es einen **Zielcode**. Den schickt das Team per DM an die Eventleitung. Die ersten 3 gewinnen.
+5. Am Ziel gibt es einen **Zielcode**. Den schickt das Team per DM an die Eventleitung. Die ersten 3 gewinnen.
 
 Der Fortschritt wird im Browser gespeichert. Auf einem anderen Gerät genügt der **zuletzt erhaltene Ortscode**, um weiterzuspielen.
 
 ## 🔒 Sicherheit (öffentliches Repo!)
 
 - `config/event.json` (alle Codes und Lösungen) und `CODES.md` (Übersicht für die Eventleitung) stehen in `.gitignore` und dürfen **niemals** committet werden.
-- Die Website (`docs/data.js`) enthält nur **verschlüsselte** Daten (AES-GCM, Schlüssel per PBKDF2 aus dem jeweiligen Code). Ohne den passenden Code lässt sich nichts auslesen, auch nicht im Quelltext.
+- Die Website (`docs/data.js`) enthält nur **verschlüsselte** Daten, auch Namen, Texte und Kartenpositionen der Orte. Öffentlich ist nur die Anzahl der Stationen (AES-GCM, Schlüssel per PBKDF2 aus dem jeweiligen Code). Ohne den passenden Code lässt sich nichts auslesen, auch nicht im Quelltext.
 - Die Tresorcodes der Minispiele sind **pro Team unterschiedlich**. Abschreiben bei anderen Teams bringt also nichts.
 
 ## Codes erzeugen (Eventleitung)
@@ -26,7 +26,7 @@ Der Fortschritt wird im Browser gespeichert. Auf einem anderen Gerät genügt de
 Codes werden mit dem **Code-Generator** erstellt. Das ist eine einzelne HTML-Datei, die lokal im Browser läuft, ohne Node.js und ohne Kommandozeile. So könnt ihr Clubs auch erst kurz vor dem Event eintragen.
 
 1. [`tools/code-generator.html`](tools/code-generator.html) herunterladen (auf GitHub: Datei öffnen → *Download raw file*) und per Doppelklick in Chrome, Edge oder Opera öffnen.
-2. Einmalig die vier Moorland-Zahlen eintragen.
+2. Einmalig die vier Zahlen für die erste Station eintragen.
 3. **Clubname eingeben → Erstellen.** Der Startcode erscheint sofort, mit Buttons zum Kopieren des Codes oder eines fertigen DM-Texts.
 4. **Website-Datei erzeugen.** Das lädt eine neue `data.js` herunter, die vorher automatisch geprüft wird.
 5. Die `data.js` auf GitHub in den Ordner `docs/` hochladen (*Add file → Upload files → Commit*). Danach auf dem Server `sudo /var/www/enchanted-hawks-winterevent/deploy/update.sh` ausführen.
@@ -37,7 +37,7 @@ Der Generator merkt sich alles im Browser. Zusätzlich gibt es **Sicherung speic
 
 > Alternative für die Kommandozeile: `node tools/build.mjs` liest `config/event.json` (Format wie die Sicherung des Generators).
 
-### Moorland-Modus
+### Modus der ersten Station
 
 `morland.mode` in `config/event.json`:
 - `ingame` (Standard): Die Teams bekommen die vier Zahlen im Spiel, z. B. von Eventleitern an den Orten.
@@ -46,7 +46,7 @@ Der Generator merkt sich alles im Browser. Zusätzlich gibt es **Sicherung speic
 ### Karte anpassen
 
 Die Position jeder Station steht in `stations[].map` (Pixel auf `docs/img/jorvik-karte.webp`, 1209 × 1180).
-**Nilmers Hochland ist geschätzt.** Bitte bei Bedarf anpassen. Die Position des Weihnachtsbaums steht in `winterMap.tree`.
+Die Position des Ziels auf der Detailkarte steht in `winterMap.tree`.
 
 ## Installation auf dem eigenen Server (nginx)
 

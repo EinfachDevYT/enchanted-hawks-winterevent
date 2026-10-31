@@ -54,8 +54,7 @@
       "map": {
         "x": 470,
         "y": 420
-      },
-      "mapNote": "Position geschätzt – bitte in config/event.json anpassen"
+      }
     },
     {
       "id": "silverglade-schloss",
@@ -83,7 +82,7 @@
         "x": 640,
         "y": 175
       },
-      "mapNote": "per Schlitten ab Moorland"
+      "arrive": "Nehmt den Moorland-Schlitten ins Winterdorf und reitet zum leuchtenden Weihnachtsbaum."
     }
   ],
   "morland": {
@@ -152,8 +151,8 @@
       "hint": "Fällt im Winter leise vom Himmel"
     },
     {
-      "word": "WINTERDORF",
-      "hint": "Euer allerletztes Ziel"
+      "word": "PFERDESTALL",
+      "hint": "Hier wohnen die Pferde"
     },
     {
       "word": "LATERNE",

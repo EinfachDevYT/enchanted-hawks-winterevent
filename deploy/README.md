@@ -119,7 +119,7 @@ sudo certbot renew --dry-run
 
 1. Öffne `https://winterevent.enchantedhawks.eu`
 2. Gib einen Startcode aus deiner geheimen `CODES.md` ein.
-3. Öffne den Moorland-Tresor mit den vier Zahlen. Der 3D-Tresor sollte sich öffnen.
+3. Öffne den ersten Tresor mit den vier Zahlen. Der 3D-Tresor sollte sich öffnen.
 
 Danach kannst du bei Cloudflare die Wolke wieder auf **orange** stellen. Wähle dann unter SSL/TLS den Modus **Full (strict)**.
 
