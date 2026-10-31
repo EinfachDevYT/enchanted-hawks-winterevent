@@ -164,6 +164,7 @@ Codes werden **nicht auf dem Server** erzeugt, sondern einmalig auf deinem eigen
 
 | Problem | Lösung |
 |---|---|
+| `certbot` meldet `unauthorized` … `acme-challenge` … `404` | Alte Version der Konfiguration. Die Regel für versteckte Dateien hat `/.well-known/` blockiert. Mit `update.sh` den neuen Stand holen, die Konfiguration erneut nach `/etc/nginx/sites-available/` kopieren, nginx neu laden und certbot nochmal starten. |
 | `certbot` meldet „DNS problem“ | Der DNS-Eintrag aus Schritt 1 greift noch nicht. Mit `dig` prüfen und warten. Bei Cloudflare die Wolke auf grau stellen. |
 | Seite zeigt „Bitte öffnet die Seite über https“ | HTTPS ist noch nicht eingerichtet (Schritt 5). |
 | Die Standard-Seite „Welcome to nginx“ erscheint | `server_name` stimmt nicht mit der Subdomain überein. `/etc/nginx/sites-available/winterevent.conf` prüfen. |
