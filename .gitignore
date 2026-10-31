@@ -1,0 +1,6 @@
+# GEHEIM – niemals committen (öffentliches Repo!)
+config/event.json
+CODES.md
+*.pdf
+node_modules/
+.DS_Store
