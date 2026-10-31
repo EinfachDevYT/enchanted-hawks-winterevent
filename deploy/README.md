@@ -137,11 +137,9 @@ Das Skript holt den neuesten Stand, prüft nginx und lädt neu. Die Spieler beko
 
 ### Neue Codes erzeugen
 
-Codes werden **nicht auf dem Server** erzeugt, sondern einmalig auf deinem eigenen PC. Danach lädst du nur die verschlüsselte Datei `docs/data.js` hoch:
+Codes werden **nicht auf dem Server** erzeugt, sondern mit dem Code-Generator (`tools/code-generator.html`) lokal im Browser. Anleitung: siehe [README im Hauptordner](../README.md#codes-erzeugen-eventleitung).
 
-1. Auf deinem PC: `config/event.json` bearbeiten (Teams, Texte) und `node tools/build.mjs` ausführen. Node.js brauchst du dafür **nur auf dem PC**, nie auf dem Server.
-2. `docs/data.js` committen und pushen. **Nie** `config/event.json` oder `CODES.md` committen!
-3. Auf dem Server: `sudo /var/www/enchanted-hawks-winterevent/deploy/update.sh`
+Kurzfassung: Club eintragen → *Website-Datei erzeugen* → `data.js` auf GitHub in `docs/` hochladen → auf dem Server `update.sh` ausführen.
 
 ---
 

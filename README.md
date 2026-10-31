@@ -21,20 +21,21 @@ Der Fortschritt wird im Browser gespeichert. Auf einem anderen Gerät genügt de
 - Die Website (`docs/data.js`) enthält nur **verschlüsselte** Daten (AES-GCM, Schlüssel per PBKDF2 aus dem jeweiligen Code). Ohne den passenden Code lässt sich nichts auslesen, auch nicht im Quelltext.
 - Die Tresorcodes der Minispiele sind **pro Team unterschiedlich**. Abschreiben bei anderen Teams bringt also nichts.
 
-## Codes erzeugen / ändern (Eventleitung)
+## Codes erzeugen (Eventleitung)
 
-Voraussetzung: Node.js 18+
+Codes werden mit dem **Code-Generator** erstellt. Das ist eine einzelne HTML-Datei, die lokal im Browser läuft, ohne Node.js und ohne Kommandozeile. So könnt ihr Clubs auch erst kurz vor dem Event eintragen.
 
-```bash
-cp config/event.example.json config/event.json   # nur beim allerersten Mal
-# in config/event.json: Teamnamen, Texte und die vier Moorland-Zahlen eintragen
-node tools/build.mjs                              # erzeugt docs/data.js + CODES.md
-```
+1. [`tools/code-generator.html`](tools/code-generator.html) herunterladen (auf GitHub: Datei öffnen → *Download raw file*) und per Doppelklick in Chrome, Edge oder Opera öffnen.
+2. Einmalig die vier Moorland-Zahlen eintragen.
+3. **Clubname eingeben → Erstellen.** Der Startcode erscheint sofort, mit Buttons zum Kopieren des Codes oder eines fertigen DM-Texts.
+4. **Website-Datei erzeugen.** Das lädt eine neue `data.js` herunter, die vorher automatisch geprüft wird.
+5. Die `data.js` auf GitHub in den Ordner `docs/` hochladen (*Add file → Upload files → Commit*). Danach auf dem Server `sudo /var/www/enchanted-hawks-winterevent/deploy/update.sh` ausführen.
+6. Erst **jetzt** die Startcodes per DM verschicken.
 
-- Fehlende Codes werden automatisch ergänzt, vorhandene bleiben erhalten.
-- `node tools/build.mjs --neu` würfelt **alle** Codes neu. Danach sind bereits verschickte DMs ungültig!
-- Danach `docs/data.js` committen und pushen (nur diese Datei, nicht `config/event.json`).
-- **Wichtig:** `config/event.json` sicher aufbewahren (z. B. privat in der Cloud). Ohne diese Datei lassen sich die bestehenden Codes nicht wiederherstellen.
+Später dazukommende Clubs einfach ergänzen und Schritt 4–5 wiederholen. Bestehende Codes und laufende Spiele bleiben gültig.
+Der Generator merkt sich alles im Browser. Zusätzlich gibt es **Sicherung speichern**. Diese Datei enthält alle Lösungen und darf nie ins Repo.
+
+> Alternative für die Kommandozeile: `node tools/build.mjs` liest `config/event.json` (Format wie die Sicherung des Generators).
 
 ### Moorland-Modus
 

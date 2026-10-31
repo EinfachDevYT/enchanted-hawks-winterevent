@@ -4,3 +4,5 @@ CODES.md
 *.pdf
 node_modules/
 .DS_Store
+winterevent-sicherung-*.json
+code-uebersicht*.html
