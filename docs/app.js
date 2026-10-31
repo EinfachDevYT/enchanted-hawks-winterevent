@@ -60,6 +60,9 @@ function adopt(p, code) {
 // ============ 3D-Bühne ============
 let stage = null;
 try { const mod = await import('./vault3d.js'); stage = mod.createStage($('#gl')); } catch (e) { console.warn('WebGL nicht verfügbar', e); }
+// Lite-Modus: ohne Grafikkarte (oder ohne WebGL) teure Hintergrund-Animationen abschalten
+const lite = !stage || stage.lite;
+if (lite) document.documentElement.classList.add('lite');
 
 // ============ UI-Helfer ============
 const screens = { intro: $('#sIntro'), map: $('#sMap'), station: $('#sStation'), vault: $('#sVault'), final: $('#sFinal') };
@@ -464,6 +467,10 @@ function confetti() {
 // ============ Start ============
 async function boot() {
   gsap.set(['#mapStage', '#mapNodes', '#bgIntro', '#toast'], { autoAlpha: 0 });
+  if (lite) {
+    let shown = false; try { shown = sessionStorage.getItem('ehw-lite-hint') === '1'; sessionStorage.setItem('ehw-lite-hint', '1'); } catch (_) {}
+    if (!shown) setTimeout(() => toast('Tipp: Hardwarebeschleunigung im Browser einschalten, dann läuft der 3D-Tresor flüssig.'), 2500);
+  }
   if (!crypto?.subtle) { screens.intro.innerHTML = '<div class="intro"><p class="lead">Bitte öffnet die Seite über https. Sonst blockiert euer Browser die Verschlüsselung.</p></div>'; return show('intro', { introBg: true }); }
   if (!state.team) return renderIntro();
   await Promise.all(Object.entries(state.codes).map(async ([k, code]) => {

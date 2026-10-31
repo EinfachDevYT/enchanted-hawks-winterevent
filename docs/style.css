@@ -37,6 +37,9 @@ button { font: inherit; color: inherit; }
 .bg-intro { position: absolute; inset: 0; }
 .aur { position: absolute; width: 90vmax; height: 50vmax; border-radius: 50%; opacity: 0.5; will-change: transform; }
 @media (max-width: 760px) { .aur { animation: none !important; } }
+/* Lite-Modus (ohne Grafikkarte): keine dauerhaften Hintergrund-Animationen */
+.lite .aur, .lite .node .dot::before, .lite .final .tree .light { animation: none !important; }
+.lite .map-stage img { -webkit-mask-image: none; mask-image: none; }
 .a1 { background: radial-gradient(closest-side, rgba(80, 210, 255, 0.55), transparent); top: -22vmax; left: -15vmax; animation: drift 22s ease-in-out infinite alternate; }
 .a2 { background: radial-gradient(closest-side, rgba(242, 180, 90, 0.35), transparent); top: -18vmax; right: -25vmax; animation: drift 28s ease-in-out infinite alternate-reverse; }
 .a3 { background: radial-gradient(closest-side, rgba(110, 140, 255, 0.35), transparent); bottom: -30vmax; left: 10vmax; animation: drift 34s ease-in-out infinite alternate; }

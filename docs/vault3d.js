@@ -9,10 +9,19 @@ export function createStage(canvas) {
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile && devicePixelRatio < 1.5, alpha: true, powerPreference: 'high-performance' });
   // Auflösung: im Tresor höher, beim Schnee niedriger. Sinkt die Bildrate, wird automatisch reduziert.
-  const MAX_PR = Math.min(devicePixelRatio, isMobile ? 1.25 : 1.5);
+  // Läuft WebGL ohne Grafikkarte (z. B. Opera GX/Chrome mit abgeschalteter Hardwarebeschleunigung)?
+  let software = false;
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+    software = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+  } catch (_) {}
+  const MAX_PR = software ? 0.6 : Math.min(devicePixelRatio, isMobile ? 1.25 : 1.5);
   let quality = 1; // 1 = voll, wird bei Ruckeln schrittweise gesenkt
   let mode = 'ambient';
-  const targetPR = () => Math.max(0.6, (mode === 'vault' ? MAX_PR : Math.min(1, MAX_PR)) * quality);
+  let snowOff = software; // ohne Grafikkarte: Schnee nur im Tresor
+  const targetPR = () => Math.max(software ? 0.45 : 0.6, (mode === 'vault' ? MAX_PR : Math.min(1, MAX_PR)) * quality);
   renderer.setPixelRatio(targetPR());
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -69,9 +78,13 @@ export function createStage(canvas) {
   scene.add(snow);
 
   // ---------- Materialien ----------
-  const steel = new THREE.MeshStandardMaterial({ color: 0x8f9bb3, metalness: 1, roughness: 0.3 });
-  const darkSteel = new THREE.MeshStandardMaterial({ color: 0x3a4357, metalness: 1, roughness: 0.42 });
-  const brass = new THREE.MeshStandardMaterial({ color: 0xe0a64e, metalness: 1, roughness: 0.22 });
+  // Ohne Grafikkarte: günstigere Glanz-Materialien statt physikalisch korrektem Metall
+  const metal = (color, roughness, spec, shine) => software
+    ? new THREE.MeshPhongMaterial({ color: new THREE.Color(color).multiplyScalar(0.55), specular: spec, shininess: shine })
+    : new THREE.MeshStandardMaterial({ color, metalness: 1, roughness });
+  const steel = metal(0x8f9bb3, 0.3, 0xdde6ff, 40);
+  const darkSteel = metal(0x3a4357, 0.42, 0x8090b0, 25);
+  const brass = metal(0xe0a64e, 0.22, 0xffe2a8, 60);
   const wallMat = new THREE.MeshLambertMaterial({ color: 0x1a2440 }); // Wand: günstiges Material, füllt den ganzen Bildschirm
   const seamMat = new THREE.MeshLambertMaterial({ color: 0x2c3654 });
 
@@ -122,7 +135,8 @@ export function createStage(canvas) {
   const frameLip = new THREE.Mesh(new THREE.TorusGeometry(R + 0.06, 0.06, 6, 72), brass); frameLip.position.z = 0.05; vault.add(frameLip);
   // Innenraum
   const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.02, R + 0.02, 6, 48, 1, true),
-    new THREE.MeshStandardMaterial({ color: 0x4a3214, metalness: 0.9, roughness: 0.38, side: THREE.BackSide, emissive: 0x2a1806, emissiveIntensity: 0.25 }));
+    software ? new THREE.MeshPhongMaterial({ color: 0x6b4a1c, specular: 0xffc070, shininess: 30, side: THREE.BackSide, emissive: 0x2a1806 })
+      : new THREE.MeshStandardMaterial({ color: 0x4a3214, metalness: 0.9, roughness: 0.38, side: THREE.BackSide, emissive: 0x2a1806, emissiveIntensity: 0.25 }));
   tunnel.rotation.x = Math.PI / 2; tunnel.position.z = -3.2; vault.add(tunnel);
   for (let i = 1; i <= 5; i++) { // Ringe für Tiefe
     const rib = new THREE.Mesh(new THREE.TorusGeometry(R - 0.02, 0.07, 6, 48), brass); rib.position.z = -i * 1.05; vault.add(rib);
@@ -140,16 +154,20 @@ export function createStage(canvas) {
   const hinge = new THREE.Group(); hinge.position.set(-R, 0, 0.05); vault.add(hinge);
   const door = new THREE.Group(); door.position.x = R; hinge.add(door);
   const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R, DEPTH, 72), steel); body.rotation.x = Math.PI / 2; door.add(body);
-  const face = new THREE.Mesh(new THREE.CircleGeometry(R - 0.05, 72), new THREE.MeshStandardMaterial({ map: etchedFace(), metalness: 0.95, roughness: 0.32 }));
+  const face = new THREE.Mesh(new THREE.CircleGeometry(R - 0.05, 72), software
+    ? new THREE.MeshPhongMaterial({ map: etchedFace(), specular: 0x666666, shininess: 30 })
+    : new THREE.MeshStandardMaterial({ map: etchedFace(), metalness: 0.95, roughness: 0.32 }));
   face.position.z = DEPTH / 2 + 0.001; door.add(face);
   [[R - 0.18, 0.05], [1.62, 0.05], [0.9, 0.035]].forEach(([r, t]) => {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(r, t, 6, 72), brass); ring.position.z = DEPTH / 2 + 0.02; door.add(ring);
   });
-  const rivetGeo = new THREE.SphereGeometry(0.075, 8, 6);
+  const rivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 8, 6), brass, 28);
+  const m4 = new THREE.Matrix4();
   for (let i = 0; i < 28; i++) {
-    const a = (i / 28) * Math.PI * 2, rv = new THREE.Mesh(rivetGeo, brass);
-    rv.position.set(Math.cos(a) * 2.0, Math.sin(a) * 2.0, DEPTH / 2 + 0.02); door.add(rv);
+    const a = (i / 28) * Math.PI * 2;
+    rivets.setMatrixAt(i, m4.makeTranslation(Math.cos(a) * 2.0, Math.sin(a) * 2.0, DEPTH / 2 + 0.02));
   }
+  door.add(rivets);
   // Scharnierblöcke
   [-1.3, 1.3].forEach((y) => {
     const hb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.5), darkSteel); hb.position.set(-R - 0.05, y, 0); door.add(hb);
@@ -192,7 +210,8 @@ export function createStage(canvas) {
   addEventListener('pointermove', (e) => { mouse.tx = (e.clientX / innerWidth - 0.5); mouse.ty = (e.clientY / innerHeight - 0.5); }, { passive: true });
   const camBase = new THREE.Vector3().copy(CAM_HOME);
   const lookAt = new THREE.Vector3(0, 0, 0);
-  let visible = !document.hidden, paused = false, rafId = 0, frameNo = 0;
+  let visible = !document.hidden, paused = false, rafId = 0, frameNo = 0, renderedStill = false, lastStill = 0;
+  const animTargets = () => [wheel.rotation, hinge.rotation, door.position, camBase, lookAt, steel, innerLight, glow.material, ...bolts.map((b) => b.userData)];
   let acc = 0, accN = 0, lastT = performance.now();
   function resize() {
     const w = innerWidth, h = innerHeight;
@@ -205,6 +224,11 @@ export function createStage(canvas) {
     if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); snowMat.uniforms.uPR.value = pr; }
   }
   resize(); addEventListener('resize', resize);
+  function syncCanvas() {
+    const off = mode === 'paused' || (mode !== 'vault' && snowOff);
+    paused = off;
+    canvas.style.visibility = off ? 'hidden' : 'visible';
+  }
   const start = () => { if (!rafId && visible && !paused) { lastT = performance.now(); rafId = requestAnimationFrame(loop); } };
   document.addEventListener('visibilitychange', () => { visible = !document.hidden; if (visible) start(); });
   function loop(now) {
@@ -217,16 +241,28 @@ export function createStage(canvas) {
     if (accN >= 45) {
       const avg = acc / accN; acc = 0; accN = 0;
       if (avg > 24 && quality > 0.55) { quality -= 0.15; applyPR(); }
+      else if (avg > 40 && mode !== 'vault' && !snowOff) { snowOff = true; syncCanvas(); } // dauerhaft zu langsam: Schnee aus
       else if (avg < 14 && quality < 1) { quality = Math.min(1, quality + 0.05); applyPR(); }
     }
     // Ohne Tresor reicht der Schnee mit 30 Bildern pro Sekunde
     if (mode !== 'vault' && (frameNo++ & 1)) return;
+    // Ohne Grafikkarte: nur rendern, wenn sich im Tresor gerade etwas bewegt
+    if (software && mode === 'vault') {
+      const moving = animTargets().some((o) => gsap.isTweening(o));
+      // Standbild alle ~0,5 s auffrischen, damit es nie verloren geht
+      if (!moving && renderedStill && now - lastStill < 500) return;
+      renderedStill = !moving;
+      if (!moving) lastStill = now;
+      // In Bewegung niedrige Auflösung (fällt nicht auf), im Stillstand scharf
+      const pr = moving ? 0.34 : MAX_PR;
+      if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); resize(); }
+    }
     const t = clock.getElapsedTime();
     snowMat.uniforms.uTime.value = t;
-    mouse.x += (mouse.tx - mouse.x) * 0.05; mouse.y += (mouse.ty - mouse.y) * 0.05;
+    if (!software) { mouse.x += (mouse.tx - mouse.x) * 0.05; mouse.y += (mouse.ty - mouse.y) * 0.05; }
     camera.position.set(camBase.x + mouse.x * 0.9, camBase.y - mouse.y * 0.6, camBase.z);
     camera.lookAt(lookAt);
-    if (vault.visible && hinge.rotation.y < -0.3) { crystal.rotation.y = t * 0.8; crystal.position.y = Math.sin(t * 1.6) * 0.12; }
+    if (!software && vault.visible && hinge.rotation.y < -0.3) { crystal.rotation.y = t * 0.8; crystal.position.y = Math.sin(t * 1.6) * 0.12; }
     renderer.render(scene, camera);
   }
   start();
@@ -246,10 +282,12 @@ export function createStage(canvas) {
   return {
     setMode(m, opts = {}) {
       mode = m;
-      paused = m === 'paused';
-      canvas.style.visibility = paused ? 'hidden' : 'visible';
+      paused = m === 'paused' || (m !== 'vault' && snowOff);
+      syncCanvas();
       if (paused) return;
       applyPR(); start();
+      renderedStill = false;
+      snow.visible = !(software && m === 'vault');
       if (m === 'vault') {
         vault.visible = true; resetVault(!!opts.open);
         const f = fit();
@@ -292,5 +330,6 @@ export function createStage(canvas) {
       return tl;
     },
     hasWebGL: true,
+    lite: software,
   };
 }
