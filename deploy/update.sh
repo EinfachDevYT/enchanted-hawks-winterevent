@@ -7,7 +7,14 @@ DIR="${1:-/var/www/enchanted-hawks-winterevent}"
 cd "$DIR"
 
 echo "→ Hole neuesten Stand von GitHub …"
-git pull --ff-only --quiet origin main
+# GitHub ist die einzige Quelle. Der Server übernimmt den Stand exakt –
+# auch wenn die Historie per Force Push umgeschrieben wurde.
+# Hinweis: Dateien auf dem Server nicht von Hand ändern, sie werden hier überschrieben.
+git fetch --quiet origin main
+if ! git diff --quiet HEAD -- 2>/dev/null; then
+  echo "  (lokale Änderungen auf dem Server werden verworfen: $(git diff --name-only HEAD | tr '\n' ' '))"
+fi
+git reset --hard --quiet origin/main
 
 echo "→ Prüfe nginx-Konfiguration …"
 nginx -t -q

@@ -133,7 +133,7 @@ Wenn es neue Änderungen im Repo gibt, reicht auf dem Server:
 sudo /var/www/enchanted-hawks-winterevent/deploy/update.sh
 ```
 
-Das Skript holt den neuesten Stand, prüft nginx und lädt neu. Die Spieler bekommen die neue Version beim nächsten Neuladen (eigene Dateien werden nie lange gecacht).
+Das Skript übernimmt exakt den Stand von GitHub, prüft nginx und lädt neu. Dateien auf dem Server deshalb nie von Hand ändern, sie werden beim nächsten Update überschrieben. Die Spieler bekommen die neue Version beim nächsten Neuladen (eigene Dateien werden nie lange gecacht).
 
 ### Neue Codes erzeugen
 
@@ -163,6 +163,7 @@ Kurzfassung: Club eintragen → *Website-Datei erzeugen* → `data.js` auf GitHu
 | Problem | Lösung |
 |---|---|
 | `certbot` meldet `unauthorized` … `acme-challenge` … `404` | Alte Version der Konfiguration. Die Regel für versteckte Dateien hat `/.well-known/` blockiert. Mit `update.sh` den neuen Stand holen, die Konfiguration erneut nach `/etc/nginx/sites-available/` kopieren, nginx neu laden und certbot nochmal starten. |
+| `update.sh` meldet „Your local changes … would be overwritten“ | Alte Version von `update.sh`. Einmal `cd /var/www/enchanted-hawks-winterevent && sudo git fetch origin && sudo git reset --hard origin/main` ausführen. Die neue Version übernimmt den GitHub-Stand immer exakt. |
 | `certbot` meldet „DNS problem“ | Der DNS-Eintrag aus Schritt 1 greift noch nicht. Mit `dig` prüfen und warten. Bei Cloudflare die Wolke auf grau stellen. |
 | Seite zeigt „Bitte öffnet die Seite über https“ | HTTPS ist noch nicht eingerichtet (Schritt 5). |
 | Die Standard-Seite „Welcome to nginx“ erscheint | `server_name` stimmt nicht mit der Subdomain überein. `/etc/nginx/sites-available/winterevent.conf` prüfen. |
