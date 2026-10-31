@@ -51,7 +51,9 @@ fi
 nginx -t -q && systemctl reload nginx
 
 echo "→ Teste den Spiel-Server …"
-if curl -fsS -X POST -H 'Content-Type: application/json' -d '{"a":"meta"}' https://winterevent.enchantedhawks.eu/api | grep -q '"ok":true'; then
+# lokal auf diesem Server prüfen (unabhängig von DNS, /etc/hosts oder IPv6)
+if curl -sk -X POST -H 'Content-Type: application/json' -d '{"a":"meta"}' --resolve winterevent.enchantedhawks.eu:443:127.0.0.1 https://winterevent.enchantedhawks.eu/api | grep -q '"ok":true' \
+   || curl -s -X POST -H 'Content-Type: application/json' -d '{"a":"meta"}' -H 'Host: winterevent.enchantedhawks.eu' http://127.0.0.1/api | grep -q '"ok":true'; then
   echo "✔ Fertig. Admin-Bereich: https://winterevent.enchantedhawks.eu/admin/"
 else
   echo "✘ Der Spiel-Server antwortet nicht. Log: sudo tail -n 30 /var/log/nginx/winterevent.error.log"; exit 1
