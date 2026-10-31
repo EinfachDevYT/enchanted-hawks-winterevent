@@ -215,17 +215,43 @@
     let pos = [...Array(N * N).keys()]; // pos[tile] = Zelle
     let moves = 0, isSolved = !!solved;
     const neighbors = (cell) => [cell - N, cell + N, cell % N ? cell - 1 : -1, (cell + 1) % N ? cell + 1 : -1].filter((c) => c >= 0 && c < N * N);
-    if (!isSolved) {
-      let prev = -1;
-      for (let i = 0; i < 240 || pos.every((p, t) => p === t); i++) {
-        const empty = pos[EMPTY];
-        const opts = neighbors(empty).filter((c) => c !== prev);
-        const target = opts[Math.floor(Math.random() * opts.length)];
-        const t = pos.indexOf(target); pos[t] = empty; pos[EMPTY] = target; prev = empty;
+    // Kürzeste Lösung vom aktuellen Stand (Breitensuche, 3×3 ist winzig)
+    function solve(start) {
+      const key = (p) => p.join(','), goal = key([...Array(N * N).keys()]);
+      const prev = new Map([[key(start), null]]); let q = [start];
+      while (q.length) {
+        const nq = [];
+        for (const p of q) {
+          if (key(p) === goal) { const path = []; let k = goal; while (prev.get(k)) { const [pk, t] = prev.get(k); path.unshift(t); k = pk; } return path; }
+          for (const c of neighbors(p[EMPTY])) { const t = p.indexOf(c), n = [...p]; n[t] = p[EMPTY]; n[EMPTY] = c; const nk = key(n); if (!prev.has(nk)) { prev.set(nk, [key(p), t]); nq.push(n); } }
+        }
+        q = nq;
       }
+      return [];
+    }
+    if (!isSolved) {
+      // Mittelschwer mischen: kürzeste Lösung 10–14 Züge (vorher ~22, zu schwer für Einsteiger)
+      let d = 0;
+      do {
+        pos = [...Array(N * N).keys()];
+        let prev = -1;
+        for (let i = 0; i < 40; i++) {
+          const empty = pos[EMPTY];
+          const opts = neighbors(empty).filter((c) => c !== prev);
+          const target = opts[Math.floor(Math.random() * opts.length)];
+          const t = pos.indexOf(target); pos[t] = empty; pos[EMPTY] = target; prev = empty;
+        }
+        d = solve(pos).length;
+      } while (d < 10 || d > 14);
     }
     el.innerHTML = '';
+    const wrap = h(`<div class="slide-wrap"></div>`);
     const board = h(`<div class="slide ${isSolved ? 'solved' : ''}"></div>`);
+    const side = h(`<div class="slide-side">
+      <div class="slide-ref"><span>So soll es aussehen</span><img alt="Vorlage für das Puzzle" src="${img}"></div>
+      <button class="btn ghost sm" type="button" data-hint>💡 Tipp: nächster Zug</button>
+      <p class="slide-help">Klickt ein leuchtendes Teil neben der Lücke an, dann rutscht es hinein. Baut das Bild wie in der Vorlage nach.</p>
+    </div>`);
     const meta = h(`<div class="game-meta"></div>`);
     const tiles = [];
     for (let t = 0; t < N * N; t++) {
@@ -236,10 +262,14 @@
       tiles.push(b); board.append(b);
     }
     const render = () => {
+      const nb = neighbors(pos[EMPTY]);
       tiles.forEach((b, t) => {
         b.style.left = `${(pos[t] % N) * (100 / N)}%`; b.style.top = `${Math.floor(pos[t] / N) * (100 / N)}%`;
         b.style.visibility = t === EMPTY && !isSolved ? 'hidden' : 'visible';
+        b.classList.toggle('movable', !isSolved && t !== EMPTY && nb.includes(pos[t]));
+        b.classList.remove('hint');
       });
+      side.hidden = isSolved;
       meta.textContent = isSolved ? 'Das Bild ist wieder ganz! Lest den Code im Bild ✨' : `Züge: ${moves}`;
     };
     function move(t) {
@@ -253,8 +283,15 @@
       }
       render();
     }
+    side.querySelector('[data-hint]').addEventListener('click', () => {
+      const next = solve(pos)[0];
+      if (next == null) return;
+      tiles.forEach((b) => b.classList.remove('hint'));
+      void tiles[next].offsetWidth; tiles[next].classList.add('hint');
+    });
     render();
-    el.append(board, meta);
+    wrap.append(board, side);
+    el.append(wrap, meta);
   }
 
   window.GAMES = { memory, detective, wordscramble, slidepuzzle, ICONS, slots };
