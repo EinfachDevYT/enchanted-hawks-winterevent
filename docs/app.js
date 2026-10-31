@@ -1,69 +1,47 @@
 // Schnitzeljagd durch Jorvik – Hauptlogik (Vollbild-Screens, Karte, Tresor-Sequenz)
 const gsap = window.gsap;
-const D = window.EVENT_DATA;
-const COUNT = D.count;
-const LAST = COUNT - 1;
-// Infos zu einem Ort sind erst bekannt, wenn er freigeschaltet bzw. vom Tresor davor verraten wurde
-const si = (k) => (state.known && state.known[k]) || null;
-const STORE = 'ehw-winterevent-v2';
+const STORE = 'ehw-winterevent-v3';
+const ADMIN_STORE = 'ehw-admin'; // Admin-Anmeldung (nur für Testwerkzeuge auf dieser Seite)
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// ============ Krypto ============
-const te = new TextEncoder();
-const norm = (s) => String(s).toUpperCase().replace(/Ä/g, 'AE').replace(/Ö/g, 'OE').replace(/Ü/g, 'UE').replace(/ß/g, 'SS').replace(/[^A-Z0-9]/g, '');
-const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-const toHex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
-async function derive(secret, salt) {
-  const base = await crypto.subtle.importKey('raw', te.encode(norm(secret)), 'PBKDF2', false, ['deriveBits']);
-  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(salt), iterations: D.iterations }, base, 512));
-  return { key: await crypto.subtle.importKey('raw', bits.slice(0, 32), 'AES-GCM', false, ['decrypt']), id: toHex(bits.slice(32, 48)) };
-}
-async function unseal(key, box) {
-  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(box.iv) }, key, unb64(box.ct))));
-}
-async function lookup(code) {
-  if (!norm(code)) return null;
-  const { key, id } = await derive(code, D.salt);
-  const box = D.entries[id];
-  if (!box) return null;
-  try { return await unseal(key, box); } catch (_) { return null; }
-}
-async function openVault(vault, answer) {
-  if (!norm(answer)) return null;
-  try { const { key } = await derive(answer, vault.salt); return await unseal(key, vault); } catch (_) { return null; }
-}
-
-// ============ Zustand ============
-const fresh = () => ({ team: null, codes: {}, opened: {}, solved: {}, riddleDigits: {}, known: {}, finishedAt: null, view: 0 });
-let state = (() => { try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && s.codes) return { ...fresh(), ...s }; } catch (_) {} return fresh(); })();
-const payloads = {};
+// ============ Server ============
+// Alle Lösungen liegen auf dem Server. Der Browser kennt nur, was das Team schon erreicht hat.
+const fresh = () => ({ token: null, view: 0 });
+let state = (() => { try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && 'token' in s) return { ...fresh(), ...s }; } catch (_) {} return fresh(); })();
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (_) {} };
-const maxStage = () => Math.max(-1, ...Object.keys(state.codes).map(Number));
+const adminToken = () => { try { return JSON.parse(localStorage.getItem(ADMIN_STORE) || 'null')?.admin || null; } catch (_) { return null; } };
+async function api(a, data = {}) {
+  let r;
+  try { r = await fetch('/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ a, token: state.token, ...data }) }); }
+  catch (_) { throw new Error('Keine Verbindung zum Server. Prüft eure Internetverbindung.'); }
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (!j || !j.ok) { const e = new Error(j?.error || 'Der Server antwortet gerade nicht. Bitte gleich nochmal versuchen.'); e.status = r.status; throw e; }
+  return j;
+}
+let D = {};
+try { D = await api('meta'); } catch (_) {}
+const COUNT = D.count || 6;
+const LAST = COUNT - 1;
+let SS = null; // Spielstand vom Server
+const si = (k) => SS?.stations?.[k] || null;
+const prog = (k) => SS?.progress?.[k] || {};
+const gameOf = (k) => SS?.games?.[k] || null;
 function status(k) {
-  const m = maxStage();
-  if (state.codes[k] != null) return state.opened[k] || k === LAST ? 'done' : 'current';
-  if (k < m) return 'done';
-  if (k === m + 1 && state.opened[m]) return 'ready';
+  const p = prog(k);
+  if (p.unlocked) return p.opened || k === LAST ? 'done' : 'current';
+  if (k > 0 && prog(k - 1).opened) return 'ready';
   return 'locked';
 }
-const focusStage = () => { const m = maxStage(); return m >= 0 && state.opened[m] && m < LAST ? m + 1 : Math.max(0, m); };
-function learn(p) {
-  state.known = state.known || {};
-  (p.trail || []).forEach((t, j) => { if (!state.known[j]) state.known[j] = t; });
-  if (p.station) state.known[p.stage] = p.station;
-}
-function adopt(p, code) {
-  if (state.team && state.team !== p.team) state = fresh();
-  learn(p);
-  state.team = p.team;
-  state.codes[p.stage] = code;
-  for (let k = 0; k < p.stage; k++) if (!state.opened[k]) state.opened[k] = '✓';
-  payloads[p.stage] = p;
-  state.view = p.stage;
+const focusStage = () => { const m = SS?.stage ?? 0; return m >= 0 && prog(m).opened && m < LAST ? m + 1 : Math.max(0, m); };
+function adopt(res) {
+  SS = res;
+  if (res.token) state.token = res.token;
+  if (res.unlocked != null) state.view = res.unlocked;
   save();
 }
+const norm = (s) => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 // ============ 3D-Bühne ============
 let stage = null;
@@ -104,10 +82,10 @@ function flash(intensity = 1) {
 }
 function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
 function updateHud() {
-  $('#team').hidden = !state.team; $('#teamName').textContent = state.team || '';
-  $('#logoutBtn').hidden = !state.team;
+  $('#team').hidden = !SS; $('#teamName').textContent = SS?.team || '';
+  $('#logoutBtn').hidden = !SS;
   const p = $('#progress');
-  p.hidden = !state.team || currentScreen === 'intro';
+  p.hidden = !SS || currentScreen === 'intro';
   p.innerHTML = Array.from({ length: COUNT }, (_, k) => { const st = status(k); return `<span class="${st === 'done' ? 'done' : st === 'current' || st === 'ready' ? 'current' : ''}" title="${esc(si(k)?.name || 'Unbekannter Ort')}"></span>`; }).join('');
 }
 function codeBox({ id, placeholder, button, numeric }) {
@@ -133,7 +111,7 @@ $('#logoutBtn').addEventListener('click', () => {
   }
   clearTimeout(logoutArmed); logoutArmed = null; $('#logoutBtn').style.borderColor = '';
   try { localStorage.removeItem(STORE); } catch (_) {}
-  state = fresh(); for (const k in payloads) delete payloads[k];
+  state = fresh(); SS = null; save();
   stage?.setMode('ambient'); renderIntro();
 });
 
@@ -158,10 +136,11 @@ function renderIntro() {
     e.preventDefault();
     const f = e.currentTarget, btn = f.querySelector('button'), msg = $('#loginMsg'), code = f.code.value;
     btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Code wird geprüft …';
-    const p = await lookup(code);
+    let p;
+    try { p = await api('login', { code, token: null }); }
+    catch (err) { btn.disabled = false; msg.className = 'msg err'; msg.textContent = err.message; f.classList.add('err'); shake(f); return; }
     btn.disabled = false;
-    if (!p) { msg.className = 'msg err'; msg.textContent = 'Diesen Code kennen wir nicht. Prüft die Schreibweise.'; f.classList.add('err'); shake(f); return; }
-    adopt(p, code);
+    adopt(p);
     msg.className = 'msg ok'; msg.textContent = `Willkommen, ${p.team}!`;
     if (!reduce) await gsap.to(title.querySelectorAll('.split-char'), { yPercent: -110, autoAlpha: 0, duration: 0.6, ease: 'power3.in', stagger: 0.01 });
     goMap({ intro: true });
@@ -272,7 +251,7 @@ async function enterStation(k) {
   if (currentScreen === 'map') await zoomTo(k);
   const stt = status(k);
   if (stt === 'ready') return renderArrive(k);
-  if (k === LAST && payloads[k]) return renderFinal(payloads[k]);
+  if (k === LAST && prog(k).unlocked) return renderFinal(SS);
   renderStation(k);
 }
 const backToMap = () => goMap();
@@ -289,46 +268,57 @@ function renderArrive(k) {
       <div data-rise style="width:min(560px,100%)">${codeBox({ id: 'unlockForm', placeholder: 'Ortscode', button: 'Freischalten' })}<div class="msg" id="unlockMsg"></div></div>
     </div>`;
   show('station', { mapVisible: true }); rise(el);
-  $('#backBtn').onclick = backToMap;
+  el.querySelector('#backBtn').onclick = backToMap;
   $('#unlockForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.currentTarget, btn = f.querySelector('button'), msg = $('#unlockMsg'), code = f.code.value;
     btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Ortscode wird geprüft …';
-    const res = await lookup(code);
+    let res;
+    try { res = await api('login', { code, unlockOnly: true }); }
+    catch (err) { btn.disabled = false; msg.className = 'msg err'; msg.textContent = err.status === 404 ? 'Das ist nicht der richtige Ortscode.' : err.message; shake(f); return; }
     btn.disabled = false;
-    if (!res || res.team !== state.team) {
-      msg.className = 'msg err'; msg.textContent = res ? 'Dieser Code gehört zu einem anderen Team!' : 'Das ist nicht der richtige Ortscode.';
-      shake(f); return;
-    }
-    adopt(res, code);
+    if (res.team !== SS?.team) { adopt(res); return goMap(); }
+    adopt(res);
     flash(0.9);
-    if (res.stage === LAST) renderFinal(res); else renderStation(res.stage);
+    if (res.unlocked === LAST) renderFinal(SS); else renderStation(res.unlocked);
   });
 }
 
-function renderRiddles(el, p) {
-  const web = D.morlandMode === 'web';
-  el.innerHTML = `<div class="riddles">${(p.riddleTexts || []).map((r, i) => `
+function renderRiddles(el, g, k) {
+  const web = g.mode === 'web', digits = g.digits || {};
+  el.innerHTML = `<div class="riddles">${(g.riddles || []).map((r, i) => `
     <div class="riddle"><div class="nr"><b>${i + 1}</b>ZAHL</div><p>„${esc(r)}“</p>
-    ${web ? (state.riddleDigits[i] != null ? `<div class="digit-badge">✓ ${esc(p.riddles[i].place)}: ${esc(state.riddleDigits[i])}</div>`
+    ${web ? (digits[i] != null ? `<div class="digit-badge">✓ Zahl ${esc(digits[i])}</div>`
       : `<form class="place-row" data-i="${i}"><input placeholder="Welcher Ort?" aria-label="Ort für Rätsel ${i + 1}"><button class="btn sm ice">Prüfen</button></form>`) : ''}
     </div>`).join('')}</div>
     ${web ? '' : '<p class="game-meta">Findet die vier Orte in Moorland. Dort bekommt ihr eure Zahlen.</p>'}`;
-  el.querySelectorAll('form.place-row').forEach((f) => f.addEventListener('submit', (e) => {
+  el.querySelectorAll('form.place-row').forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const i = +f.dataset.i;
-    if (p.riddles[i].accept.includes(norm(f.querySelector('input').value))) { state.riddleDigits[i] = p.riddles[i].digit; save(); renderRiddles(el, p); }
-    else shake(f);
+    try {
+      const r = await api('game', { stage: k, op: 'place', i: +f.dataset.i, place: f.querySelector('input').value });
+      if (r.correct) { SS.games[k] = r.game; renderRiddles(el, r.game, k); } else shake(f);
+    } catch (err) { toast(err.message); }
   }));
 }
 
+// Testwerkzeug für Admins: Station sofort lösen (NUR ZUM TESTEN – später entfernen)
+async function testSolve(k) {
+  try {
+    const r = await api('test_solve', { stage: k, admin: adminToken() });
+    await refresh();
+    toast(`Test: Tresorcode ist ${r.answer}`);
+    return r.answer;
+  } catch (err) { toast(err.message); return null; }
+}
+async function refresh() { try { SS = await api('state'); } catch (err) { if (err.status === 401) { state = fresh(); SS = null; save(); } throw err; } }
+
 function renderStation(k) {
-  const p = payloads[k], st = si(k) || p?.station || { name: 'Station ' + (k + 1) }, el = screens.station, stt = status(k);
+  const p = gameOf(k), st = si(k) || { name: 'Station ' + (k + 1) }, el = screens.station, stt = status(k);
   if (!p) {
     el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← Karte</button><div class="arrive"><div class="eyebrow">Station ${k + 1}</div><h2 class="display">${esc(st.name)}</h2><p class="lead">Diese Station habt ihr bereits geschafft.</p></div>`;
-    $('#backBtn').onclick = backToMap; return show('station', { mapVisible: true });
+    el.querySelector('#backBtn').onclick = backToMap; return show('station', { mapVisible: true });
   }
-  const opened = state.opened[k] && state.opened[k] !== '✓';
+  const opened = !!prog(k).opened;
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← Karte</button>
     <div class="station">
       <aside class="station-side">
@@ -342,28 +332,31 @@ function renderStation(k) {
         <div class="cta-row" id="ctaRow"></div>
       </div>
     </div>`;
-  $('#backBtn').onclick = backToMap;
+  el.querySelector('#backBtn').onclick = backToMap;
   const cta = () => {
-    const solved = k === 0 || state.solved[k];
-    $('#ctaRow').innerHTML = opened
+    const solved = k === 0 || gameOf(k)?.solved;
+    const test = adminToken() ? `<button class="btn ghost sm" id="testBtn" title="Nur für Admins sichtbar">🧪 Test: Lösung</button>` : '';
+    $('#ctaRow').innerHTML = (opened
       ? `<button class="btn" id="vaultBtn">Tresor ansehen <span class="arrow">→</span></button>`
       : solved
         ? `<button class="btn" id="vaultBtn">Zum Tresor <span class="arrow">→</span></button>${k > 0 ? '<span class="cta-note">Code komplett! Merkt ihn euch.</span>' : ''}`
-        : `<button class="btn ghost" disabled>Tresor noch verschlossen</button><span class="lead" style="font-size:.88rem">Löst das Spiel, um den Tresorcode zu erhalten.</span>`;
+        : `<button class="btn ghost" disabled>Tresor noch verschlossen</button><span class="lead" style="font-size:.88rem">Löst das Spiel, um den Tresorcode zu erhalten.</span>`) + (opened ? '' : test);
     $('#vaultBtn')?.addEventListener('click', () => enterVault(k));
+    $('#testBtn')?.addEventListener('click', async () => { const a = await testSolve(k); if (a) renderStation(k); });
   };
   const game = $('#game');
-  if (k === 0) renderRiddles(game, p);
-  else window.GAMES[st.game](game, { answer: p.answer, solved: state.solved[k], words: p.words, seed: state.team + k,
-    onDone: () => { state.solved[k] = true; save(); cta(); setTimeout(() => $('#ctaRow').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }), 500); if (!reduce) gsap.from('#ctaRow > *', { y: 20, autoAlpha: 0, duration: 0.7, ease: 'back.out(2)', stagger: 0.08 }); } });
+  if (k === 0) renderRiddles(game, p, k);
+  else window.GAMES[st.game](game, { game: p, toast,
+    call: async (op, data) => { const r = await api('game', { stage: k, op, ...data }); if (r.game) SS.games[k] = r.game; return r; },
+    onDone: () => { cta(); setTimeout(() => $('#ctaRow').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }), 500); if (!reduce) gsap.from('#ctaRow > *', { y: 20, autoAlpha: 0, duration: 0.7, ease: 'back.out(2)', stagger: 0.08 }); } });
   cta();
   show('station', { mapVisible: true }); rise(el);
 }
 
 // ============ Tresor ============
 async function enterVault(k) {
-  const st = si(k), p = payloads[k], el = screens.vault;
-  const opened = state.opened[k] && state.opened[k] !== '✓' ? state.opened[k] : null;
+  const st = si(k), el = screens.vault;
+  const opened = prog(k).opened ? prog(k).nextCode : null;
   stage?.setMode('vault', { open: !!opened });
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← ${esc(st.name)}</button>
     ${stage ? '' : '<div class="fallback-vault"></div>'}
@@ -374,12 +367,12 @@ async function enterVault(k) {
       <div class="msg" id="vaultMsg"></div>
     </div>
     <div class="reveal" id="reveal"></div>`;
-  $('#backBtn').onclick = () => { stage?.setMode('ambient'); renderStation(k); };
+  el.querySelector('#backBtn').onclick = () => { stage?.setMode('ambient'); renderStation(k); };
   const shown = show('vault');
   if (opened) { await shown; return showReveal(k, opened, false); }
   const f = $('#vaultForm'), input = f.code;
-  const rt = p.riddleTexts || [];
-  if (k === 0 && rt.length && rt.every((_, i) => state.riddleDigits[i] != null)) input.value = rt.map((_, i) => state.riddleDigits[i]).join('');
+  const g0 = gameOf(0), dg = g0?.digits || {};
+  if (k === 0 && g0?.mode === 'web' && (g0.riddles || []).every((_, i) => dg[i] != null)) input.value = g0.riddles.map((_, i) => dg[i]).join('');
   let lastLen = input.value.length;
   input.addEventListener('input', () => { stage?.tick(input.value.length >= lastLen ? 1 : -1); lastLen = input.value.length; });
   if (!reduce) gsap.from('#vaultUi > *', { y: 30, autoAlpha: 0, duration: 0.9, ease: 'power3.out', stagger: 0.08, delay: 0.7 });
@@ -388,16 +381,17 @@ async function enterVault(k) {
     e.preventDefault();
     const btn = f.querySelector('button'), msg = $('#vaultMsg');
     btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Das Schloss wird geprüft …';
-    const res = await openVault(p.vault, input.value);
-    btn.disabled = false;
-    if (!res) {
+    let res;
+    try { res = await api('vault', { stage: k, answer: input.value }); }
+    catch (err) {
+      btn.disabled = false;
       stage?.fail(); f.classList.add('err'); shake(f);
-      msg.className = 'msg err'; msg.textContent = 'Klack. Der Tresor bleibt zu. Versucht es nochmal!';
+      msg.className = 'msg err'; msg.textContent = err.message;
       setTimeout(() => f.classList.remove('err'), 1200);
       return;
     }
-    state.opened[k] = res.nextCode;
-    if (res.next) state.known[k + 1] = res.next; // erst jetzt wird das nächste Ziel bekannt
+    btn.disabled = false;
+    SS = res.state; // erst jetzt wird das nächste Ziel bekannt
     save(); updateHud();
     input.blur();
     msg.className = 'msg ok'; msg.textContent = 'Richtig!';
@@ -439,9 +433,9 @@ function showReveal(k, code, animate) {
 
 // ============ Finale ============
 function renderFinal(p) {
-  const first = !state.finishedAt;
-  if (first) { state.finishedAt = new Date().toISOString(); save(); }
-  const t = new Date(state.finishedAt);
+  // Zeit und Platz kommen vom Server – im Browser lässt sich nichts fälschen
+  let first = false; try { first = sessionStorage.getItem('ehw-confetti') !== p.zielcode; sessionStorage.setItem('ehw-confetti', p.zielcode); } catch (_) {}
+  const t = new Date(p.finishedAt);
   const lights = [[100, 62, '#f2b45a'], [82, 98, '#8fdcff'], [118, 104, '#ffdca0'], [70, 140, '#f2b45a'], [128, 146, '#8fdcff'], [98, 128, '#ffdca0'], [60, 178, '#8fdcff'], [140, 182, '#f2b45a'], [100, 168, '#ffdca0']];
   const code = [...p.zielcode].map((c) => `<span class="${c === '-' ? 'sep' : ''}">${esc(c)}</span>`).join('');
   const el = screens.final;
@@ -455,7 +449,7 @@ function renderFinal(p) {
     </svg>
     <div class="eyebrow" data-rise>Station ${LAST + 1} · ${esc(si(LAST)?.name || 'Ziel')}</div>
     <h1 class="display" data-rise>Ziel <em>erreicht!</em></h1>
-    <p class="lead" data-rise>${esc(p.team)} hat das Ziel erreicht.</p>
+    <p class="lead" data-rise>${esc(p.team)} hat das Ziel erreicht${p.rank ? ` – als <b>${p.rank}. Club</b>` : ''}.</p>
     <div class="stamp" data-rise>${t.toLocaleDateString('de-DE')} · ${t.toLocaleTimeString('de-DE')} Uhr</div>
     <div class="eyebrow" style="margin-top:14px" data-rise>Euer Zielcode</div>
     <div class="big-code" data-rise>${code}</div>
@@ -481,20 +475,16 @@ function confetti() {
 
 // ============ Start ============
 async function boot() {
-  if (!D.count || !D.entries) { screens.intro.innerHTML = '<div class="intro"><p class="lead">Die Spieldaten sind veraltet. Bitte mit dem aktuellen Code-Generator eine neue data.js erzeugen und hochladen.</p></div>'; return show('intro', { introBg: true }); }
   gsap.set(['#mapStage', '#mapNodes', '#bgIntro', '#toast'], { autoAlpha: 0 });
+  if (!D.count) { screens.intro.innerHTML = '<div class="intro"><p class="lead">Der Spielserver ist gerade nicht erreichbar. Bitte in ein paar Minuten nochmal versuchen.</p></div>'; return show('intro', { introBg: true }); }
+  $('#brandClub') && ($('#brandClub').textContent = D.clubName);
   if (lite) {
     let shown = false; try { shown = sessionStorage.getItem('ehw-lite-hint') === '1'; sessionStorage.setItem('ehw-lite-hint', '1'); } catch (_) {}
     if (!shown) setTimeout(() => toast('Tipp: Hardwarebeschleunigung im Browser einschalten, dann läuft der 3D-Tresor flüssig.'), 2500);
   }
-  if (!crypto?.subtle) { screens.intro.innerHTML = '<div class="intro"><p class="lead">Bitte öffnet die Seite über https. Sonst blockiert euer Browser die Verschlüsselung.</p></div>'; return show('intro', { introBg: true }); }
-  if (!state.team) return renderIntro();
-  await Promise.all(Object.entries(state.codes).map(async ([k, code]) => {
-    const p = await lookup(code);
-    if (p && p.team === state.team) { payloads[k] = p; learn(p); } else delete state.codes[k];
-  }));
-  if (!Object.keys(state.codes).length) { state = fresh(); save(); return renderIntro(); }
-  save();
+  if (!state.token) return renderIntro();
+  try { await refresh(); } catch (_) {}
+  if (!SS) return renderIntro();
   goMap({ intro: true });
 }
 boot();

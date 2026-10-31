@@ -2,92 +2,113 @@
   "eventName": "Schnitzeljagd durch Jorvik",
   "clubName": "Enchanted Hawks",
   "subtitle": "Winterevent",
+  "mapImage": "img/jorvik-karte.webp",
+  "mapSize": [
+    1209,
+    1180
+  ],
+  "mapView": [
+    290,
+    30,
+    740,
+    800
+  ],
+  "winterMap": {
+    "image": "img/winterdorf-karte.webp",
+    "size": [
+      664,
+      663
+    ],
+    "tree": [
+      393,
+      172
+    ]
+  },
   "stations": [
     {
       "id": "morland",
       "name": "Moorland",
       "game": "riddles",
       "title": "Code-Suche",
-      "codePrefix": "HAWK",
       "intro": "Willkommen in Moorland, Reiterinnen und Reiter! Vier Rätsel führen euch an vier Orte in Moorland. An jedem Ort wartet eine Zahl auf euch. In der richtigen Reihenfolge ergeben die vier Zahlen den Code für den Tresor.",
       "nextHint": "Reitet nach Doyles Abbey. Dort wartet das nächste Spiel auf euch.",
       "map": {
         "x": 560,
         "y": 728
-      }
+      },
+      "codePrefix": "HAWK"
     },
     {
       "id": "doyles-abby",
       "name": "Doyles Abbey",
       "game": "memory",
       "title": "Karten-Klick",
-      "codePrefix": "ABBY",
       "intro": "In den alten Mauern von Doyles Abbey liegen verzauberte Karten. Deckt immer zwei Karten auf und findet alle Paare. Jedes gefundene Paar verrät euch einen Buchstaben des Tresorcodes.",
       "nextHint": "Euer Weg führt euch weiter nach Silverglade Village.",
       "map": {
         "x": 748,
         "y": 690
-      }
+      },
+      "codePrefix": "ABBY"
     },
     {
       "id": "silverglade-village",
       "name": "Silverglade Village",
       "game": "detective",
       "title": "Screen-Detektiv",
-      "codePrefix": "VILLAGE",
       "intro": "In Silverglade Village hat jemand Dinge im Schnee versteckt. Sucht das Winterbild genau ab und klickt auf alle versteckten Gegenstände. Jeder Fund verrät einen Buchstaben des Tresorcodes.",
       "nextHint": "Reitet hinauf ins Nilmers Hochland.",
       "map": {
         "x": 520,
         "y": 560
       },
-      "labelPos": "right"
+      "labelPos": "right",
+      "codePrefix": "VILLAGE"
     },
     {
       "id": "nilmers-hochland",
       "name": "Nilmers Hochland",
       "game": "wordscramble",
       "title": "Buchstabensalat",
-      "codePrefix": "HOCHLAND",
       "intro": "Der eisige Wind im Nilmers Hochland hat die Buchstaben durcheinandergewirbelt. Bringt die Wörter wieder in die richtige Reihenfolge. Jedes gelöste Wort schenkt euch einen Buchstaben des Tresorcodes.",
       "nextHint": "Euer nächstes Ziel ist Silverglade-Schloss.",
       "map": {
         "x": 470,
         "y": 420
-      }
+      },
+      "codePrefix": "HOCHLAND"
     },
     {
       "id": "silverglade-schloss",
       "name": "Silverglade-Schloss",
       "game": "slidepuzzle",
       "title": "Schiebepuzzle",
-      "codePrefix": "SCHLOSS",
       "intro": "Ein Zauber hat das Bild von Silverglade Schloss in Stücke geschlagen. Schiebt die Teile zurück an ihren Platz. Im fertigen Bild erscheint der Tresorcode.",
       "nextHint": "Nehmt den Moorland-Schlitten, um im Winterdorf zum Weihnachtsbaum zu gelangen.",
       "map": {
         "x": 540,
         "y": 640
       },
-      "labelPos": "right"
+      "labelPos": "right",
+      "codePrefix": "SCHLOSS"
     },
     {
       "id": "winterdorf",
       "name": "Winterdorf",
       "game": "finale",
       "title": "Ziel & Belohnung",
-      "codePrefix": "WINTER",
       "intro": "Ihr habt den Weihnachtsbaum im Winterdorf erreicht!",
       "nextHint": "",
       "map": {
         "x": 640,
         "y": 175
       },
-      "arrive": "Nehmt den Moorland-Schlitten ins Winterdorf und reitet zum leuchtenden Weihnachtsbaum."
+      "arrive": "Nehmt den Moorland-Schlitten ins Winterdorf und reitet zum leuchtenden Weihnachtsbaum.",
+      "codePrefix": "WINTER"
     }
   ],
   "morland": {
     "mode": "ingame",
-    "_modeInfo": "ingame = die Teams bekommen die Zahlen im Spiel (z. B. von Eventleitern an den Orten). web = die Teams tippen den Ort ein und die Website verrät die Zahl.",
     "riddles": [
       {
         "text": "Ein Ort voll Freude, Glanz & Glück, hier findet man so manches Stück. Für jeden Reiter, groß & klein, kann hier ein kleines Wunder sein.",
@@ -97,8 +118,7 @@
           "bonusshop",
           "bonus shop",
           "bonus"
-        ],
-        "digit": "?"
+        ]
       },
       {
         "text": "In Moorland gibt es viel zu seh'n, mit etwas Glück wirst du was Schönes find'n. Versteckt & still liegt manches dort, vielleicht entdeckst du diesen Ort.",
@@ -107,8 +127,7 @@
           "mine",
           "die mine",
           "bergwerk"
-        ],
-        "digit": "?"
+        ]
       },
       {
         "text": "In Moorland wird gehämmert & gemacht, das Feuer lodert & Funken erwachen. Hier wird so manches neu gemacht, mit viel Geschick & voller Kraft!",
@@ -117,8 +136,7 @@
           "schmiede",
           "die schmiede",
           "schmied"
-        ],
-        "digit": "?"
+        ]
       },
       {
         "text": "Ein rotes Häuschen steht im Grünen da, die Natur ist wunderschön nah. Mit Blumen, Bäumen & Sonnenschein lädt dieser Ort zum Verweilen ein.",
@@ -128,8 +146,7 @@
           "holdsworth",
           "mrs holdsworth",
           "frau holdsworths haus"
-        ],
-        "digit": "?"
+        ]
       }
     ]
   },
@@ -159,52 +176,93 @@
       "hint": "Leuchtet in dunklen Winternächten"
     }
   ],
-  "teams": [
-    {
-      "name": "Team Polarstern"
-    },
-    {
-      "name": "Team Schneeflocke"
-    },
-    {
-      "name": "Team Nordlicht"
-    },
-    {
-      "name": "Team Eiskristall"
-    },
-    {
-      "name": "Team Winterzauber"
-    },
-    {
-      "name": "Team Frostmähne"
-    },
-    {
-      "name": "Team Sternschnuppe"
-    },
-    {
-      "name": "Team Mistelzweig"
-    }
-  ],
-  "mapImage": "img/jorvik-karte.webp",
-  "mapSize": [
-    1209,
-    1180
-  ],
-  "winterMap": {
-    "image": "img/winterdorf-karte.webp",
-    "size": [
-      664,
-      663
-    ],
-    "tree": [
-      393,
-      172
+  "memory": {
+    "kinds": [
+      "hufeisen",
+      "karotte",
+      "apfel",
+      "flocke",
+      "stern",
+      "falke"
     ]
   },
-  "mapView": [
-    290,
-    30,
-    740,
-    800
+  "detective": {
+    "objects": [
+      {
+        "id": "falke",
+        "label": "Falke",
+        "x": 671,
+        "y": 77,
+        "r": 13
+      },
+      {
+        "id": "hufeisen",
+        "label": "Hufeisen",
+        "x": 612,
+        "y": 248
+      },
+      {
+        "id": "laterne",
+        "label": "Laterne",
+        "x": 352,
+        "y": 268
+      },
+      {
+        "id": "geschenk",
+        "label": "Geschenk",
+        "x": 742,
+        "y": 366
+      },
+      {
+        "id": "karotte",
+        "label": "Karotte",
+        "x": 448,
+        "y": 408
+      }
+    ]
+  },
+  "words6": [
+    "SCHNEE",
+    "FOHLEN",
+    "GLOCKE",
+    "KERZEN",
+    "WINTER",
+    "ZUCKER",
+    "GALOPP",
+    "TRENSE",
+    "ADVENT",
+    "NORDEN",
+    "MANTEL",
+    "MISTEL",
+    "FALKEN",
+    "FUNKEL",
+    "ZAUBER",
+    "STERNE",
+    "WOLKEN",
+    "SCHLAF",
+    "GEWEIH",
+    "KAMINE"
+  ],
+  "words5": [
+    "STERN",
+    "HAFER",
+    "STROH",
+    "KUFEN",
+    "FROST",
+    "APFEL",
+    "KEKSE",
+    "ZWEIG",
+    "PONYS",
+    "ENGEL",
+    "KRONE",
+    "MAGIE",
+    "NEBEL",
+    "SCHAL",
+    "LICHT",
+    "KERZE",
+    "WOLKE",
+    "BEERE",
+    "GLANZ",
+    "MONDE"
   ]
 }

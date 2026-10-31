@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="dark">
+  <title>Eventleitung · Winterevent</title>
+  <link rel="icon" type="image/webp" href="../img/logo-mark.webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&family=Oswald:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="../" target="_blank" rel="noopener">
+      <img src="../img/logo-mark.webp" alt="" width="36" height="36">
+      <span><b>Enchanted Hawks</b><small>Eventleitung · Winterevent</small></span>
+    </a>
+    <div class="who" id="who" hidden>
+      <span class="live" id="liveDot"><i></i>Live</span>
+      <span id="whoName"></span>
+      <button class="ghost sm" id="logoutBtn">Abmelden</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Anmeldung -->
+    <section class="card login" id="loginView">
+      <h1>Eventleitung</h1>
+      <p class="muted">Melde dich an, um Clubs anzulegen und das Event live zu verfolgen.</p>
+      <form id="loginForm" class="stack" autocomplete="on">
+        <label>Dein Name<input id="name" name="username" autocomplete="username" maxlength="40" required></label>
+        <label>Passwort<input id="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary">Anmelden</button>
+        <div class="msg" id="loginMsg" role="status"></div>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <div id="dash" hidden>
+      <section class="stats" id="stats"></section>
+
+      <section class="card">
+        <h2>Club anlegen</h2>
+        <form class="row" id="createForm" autocomplete="off">
+          <input id="clubName" placeholder="Clubname, z. B. Silver Riders" maxlength="60" aria-label="Clubname">
+          <button class="primary">Erstellen</button>
+        </form>
+        <div id="created" class="created" hidden></div>
+        <div class="msg" id="createMsg" role="status"></div>
+      </section>
+
+      <section class="card">
+        <div class="row between">
+          <h2>Live-Übersicht</h2>
+          <span class="muted small" id="updated"></span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Platz</th><th>Club</th><th>Fortschritt</th><th>Gerade</th><th>Zuletzt aktiv</th><th>Startcode</th><th class="right">Aktionen</th></tr></thead>
+          <tbody id="teams"></tbody>
+        </table></div>
+      </section>
+
+      <section class="card">
+        <h2>Was gerade passiert</h2>
+        <ol class="feed" id="feed"></ol>
+      </section>
+
+      <section class="card test" id="testInfo" hidden>
+        <h2>🧪 Testmodus aktiv</h2>
+        <p class="muted">Solange du angemeldet bist, zeigt die Spielseite <b>in diesem Browser</b> an jeder Station einen Knopf „Test: Lösung“. Spieler sehen ihn nie. Vor dem Event in der Server-Konfiguration <code>test_tools</code> auf <code>false</code> setzen.</p>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="codesDlg">
+    <form method="dialog">
+      <h2 id="codesTitle">Codes</h2>
+      <div class="table-wrap"><table><thead><tr><th>Station</th><th>Ortscode</th><th>Tresorcode</th></tr></thead><tbody id="codesBody"></tbody></table></div>
+      <p class="muted small" id="codesZiel"></p>
+      <button class="ghost">Schließen</button>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

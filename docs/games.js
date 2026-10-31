@@ -1,13 +1,16 @@
 /* Minispiele: Memory (Karten-Klick), Screen-Detektiv, Buchstabensalat, Schiebepuzzle.
-   Jedes Spiel bekommt einen Container, die Lösung (answer) und onDone(); es zeigt den
-   Tresorcode Buchstabe für Buchstabe in "Code-Slots" an. */
+   Die Lösungen kennt nur der Server. Jedes Spiel bekommt seinen öffentlichen Zustand (game),
+   eine Funktion call(op, daten) für Spielzüge und onDone(). Der Server verrät die Buchstaben
+   des Tresorcodes erst, wenn sie verdient sind. */
 (function () {
   const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
-  function slots(answer, filled) {
-    return `<div class="slots" aria-label="Tresorcode">${[...answer].map((c, i) =>
-      `<div class="slot ${i < filled ? 'filled' : ''}">${i < filled ? c : ''}</div>`).join('')}</div>`;
+  // Code-Slots: len Felder, die ersten mit den bereits verdienten Buchstaben
+  function slots(len, revealed = '') {
+    return `<div class="slots" aria-label="Tresorcode">${Array.from({ length: len }, (_, i) =>
+      `<div class="slot ${i < revealed.length ? 'filled' : ''}">${i < revealed.length ? revealed[i] : ''}</div>`).join('')}</div>`;
   }
+  const errText = (e) => (e && e.message) || 'Verbindung unterbrochen. Bitte nochmal versuchen.';
   function seeded(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
   function hashStr(str) { let x = 2166136261; for (const c of str) x = Math.imul(x ^ c.charCodeAt(0), 16777619); return x >>> 0; }
   function shuffle(a, rnd = Math.random) { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -25,51 +28,48 @@
   };
 
   // ---------- 1) Memory ----------
-  function memory(el, { answer, solved, onDone }) {
-    const kinds = ['hufeisen', 'karotte', 'apfel', 'flocke', 'stern', 'falke', 'geschenk', 'laterne'].slice(0, answer.length);
-    let matched = solved ? answer.length : 0, tries = 0, open = [], lock = false;
-    const deck = shuffle([...kinds, ...kinds]);
+  function memory(el, { game, call, onDone, toast }) {
+    let busy = false, tries = 0, pending = null;
     el.innerHTML = '';
-    const slotBox = h(`<div>${slots(answer, matched)}</div>`);
     const grid = h(`<div class="memory"></div>`);
+    const slotBox = h(`<div></div>`);
     const meta = h(`<div class="game-meta"></div>`);
-    const updateMeta = () => { meta.textContent = matched === answer.length ? 'Alle Paare gefunden! ✨' : `Paare: ${matched} / ${answer.length} · Versuche: ${tries}`; };
-    deck.forEach((k) => {
-      const card = h(`<button class="card ${solved ? 'matched' : ''}" aria-label="Karte"><div class="card-inner">
+    const pairs = game.cards / 2;
+    const cards = Array.from({ length: game.cards }, (_, i) => {
+      const card = h(`<button class="card" aria-label="Karte ${i + 1}"><div class="card-inner">
         <div class="card-face card-back"><svg viewBox="0 0 64 44"><use href="#hawk-shape"/></svg></div>
-        <div class="card-face card-front">${ICONS[k]}</div></div></button>`);
-      card.dataset.kind = k;
-      card.addEventListener('click', () => {
-        if (lock || solved || card.classList.contains('flipped') || card.classList.contains('matched')) return;
-        card.classList.add('flipped'); open.push(card);
-        if (open.length < 2) return;
-        tries++; lock = true;
-        const [a, b] = open;
-        if (a.dataset.kind === b.dataset.kind) {
-          setTimeout(() => {
-            a.classList.add('matched'); b.classList.add('matched'); open = []; lock = false; matched++;
-            slotBox.innerHTML = slots(answer, matched); updateMeta();
-            if (matched === answer.length) onDone();
-          }, 350);
-        } else {
-          setTimeout(() => { a.classList.remove('flipped'); b.classList.remove('flipped'); open = []; lock = false; updateMeta(); }, 900);
-        }
-        updateMeta();
-      });
-      grid.append(card);
+        <div class="card-face card-front"></div></div></button>`);
+      card.addEventListener('click', () => flip(i));
+      grid.append(card); return card;
     });
-    updateMeta();
+    const show = (i, kind) => { cards[i].querySelector('.card-front').innerHTML = ICONS[kind] || ''; cards[i].classList.add('flipped'); };
+    function update(g) {
+      game = g;
+      for (const [i, kind] of Object.entries(g.faces || {})) { show(+i, kind); cards[+i].classList.add('matched'); }
+      const found = g.revealed.length;
+      slotBox.innerHTML = slots(g.len, g.revealed);
+      meta.textContent = g.solved ? 'Alle Paare gefunden! ✨' : `Paare: ${found} / ${pairs} · Versuche: ${tries}`;
+    }
+    async function flip(i) {
+      if (busy || game.solved || cards[i].classList.contains('matched') || pending === i) return;
+      busy = true;
+      try {
+        const r = await call('flip', { i });
+        show(i, r.kind);
+        if (r.other === undefined) { pending = i; }
+        else {
+          tries++; pending = null; show(r.other, r.otherKind);
+          if (r.match) { setTimeout(() => { update(r.game); if (r.game.solved) onDone(r.game); }, 300); }
+          else { await new Promise((res) => setTimeout(res, 850)); cards[i].classList.remove('flipped'); cards[r.other].classList.remove('flipped'); update(r.game); }
+        }
+      } catch (e) { toast(errText(e)); }
+      busy = false;
+    }
+    update(game);
     el.append(grid, slotBox, meta);
   }
 
   // ---------- 2) Screen-Detektiv ----------
-  const SCENE_OBJECTS = [
-    { id: 'falke', label: 'Falke', x: 671, y: 77, r: 13 }, // dunkle Silhouette vor dem Mond
-    { id: 'hufeisen', label: 'Hufeisen', x: 612, y: 248 },
-    { id: 'laterne', label: 'Laterne', x: 352, y: 268 },
-    { id: 'geschenk', label: 'Geschenk', x: 742, y: 366 },
-    { id: 'karotte', label: 'Karotte', x: 448, y: 408 },
-  ];
   function sceneSVG() {
     const stars = Array.from({ length: 60 }, (_, i) => {
       const r = seeded(i * 97 + 3); return `<circle cx="${(r() * 800).toFixed(0)}" cy="${(r() * 170).toFixed(0)}" r="${(r() * 1.4 + 0.4).toFixed(1)}" fill="#fff" opacity="${(r() * 0.6 + 0.3).toFixed(2)}"/>`;
@@ -113,109 +113,116 @@
       <g id="marks"></g>
     </svg>`;
   }
-  function detective(el, { answer, solved, onDone }) {
-    const objs = SCENE_OBJECTS.slice(0, answer.length);
-    const found = new Set(solved ? objs.map((o) => o.id) : []);
+  function detective(el, { game, call, onDone, toast }) {
     el.innerHTML = '';
     const wrap = h(`<div class="scene-wrap">${sceneSVG()}</div>`);
     const list = h(`<div class="find-list"></div>`);
     const slotBox = h(`<div></div>`);
     const svg = wrap.querySelector('svg'), marks = svg.querySelector('#marks');
-    const render = () => {
-      list.innerHTML = objs.map((o) => `<span class="find-item ${found.has(o.id) ? 'found' : ''}">${o.label}</span>`).join('');
-      slotBox.innerHTML = slots(answer, found.size);
-      marks.innerHTML = objs.filter((o) => found.has(o.id)).map((o) =>
+    let busy = false;
+    function update(g) {
+      game = g;
+      list.innerHTML = g.labels.map((o) => `<span class="find-item ${g.found.includes(o.id) ? 'found' : ''}">${o.label}</span>`).join('');
+      slotBox.innerHTML = slots(g.len, g.revealed);
+      marks.innerHTML = g.marks.map((o) =>
         `<circle cx="${o.x}" cy="${o.y}" r="22" fill="none" stroke="#7cf2a6" stroke-width="4"/><circle cx="${o.x}" cy="${o.y}" r="28" fill="none" stroke="#7cf2a6" stroke-width="1.5" opacity=".6"/>`).join('');
-    };
-    svg.addEventListener('click', (e) => {
-      if (found.size === objs.length) return;
+    }
+    svg.addEventListener('click', async (e) => {
+      if (game.solved || busy) return;
       const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
       const p = pt.matrixTransform(svg.getScreenCTM().inverse());
-      const k = 800 / svg.getBoundingClientRect().width; // auf kleinen Bildschirmen größere Trefferzone
-      const hit = objs.find((o) => !found.has(o.id) && Math.hypot(o.x - p.x, o.y - p.y) < Math.max(o.r || 26, (o.r ? 11 : 18) * k));
-      if (hit) {
-        found.add(hit.id); render();
-        if (found.size === objs.length) onDone();
-      } else {
-        const m = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        m.setAttribute('cx', p.x); m.setAttribute('cy', p.y); m.setAttribute('r', 14);
-        m.setAttribute('fill', 'none'); m.setAttribute('stroke', '#ff7a9a'); m.setAttribute('stroke-width', 3);
-        svg.append(m); setTimeout(() => m.remove(), 500);
-      }
+      const scale = 800 / svg.getBoundingClientRect().width;
+      busy = true;
+      try {
+        const r = await call('click', { x: Math.round(p.x), y: Math.round(p.y), scale });
+        update(r.game);
+        if (!r.hit) {
+          const m = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          m.setAttribute('cx', p.x); m.setAttribute('cy', p.y); m.setAttribute('r', 14);
+          m.setAttribute('fill', 'none'); m.setAttribute('stroke', '#ff7a9a'); m.setAttribute('stroke-width', 3);
+          svg.append(m); setTimeout(() => m.remove(), 500);
+        } else if (r.game.solved) onDone(r.game);
+      } catch (err) { toast(errText(err)); }
+      busy = false;
     });
-    render();
+    update(game);
     el.append(wrap, list, slotBox);
   }
 
   // ---------- 3) Buchstabensalat ----------
-  function wordscramble(el, { answer, solved, onDone, words, seed }) {
-    const rnd = seeded(hashStr(seed));
-    const done = new Set(solved ? words.map((_, i) => i) : []);
+  function wordscramble(el, { game, call, onDone, toast }) {
     el.innerHTML = '';
     const box = h(`<div class="words"></div>`);
     const slotBox = h(`<div></div>`);
-    const renderSlots = () => { slotBox.innerHTML = slots(answer, done.size); };
-    words.forEach((w, i) => {
-      let mixed; do mixed = shuffle([...w.word], rnd).join(''); while (mixed === w.word && w.word.length > 1);
-      const row = h(`<form class="word-row ${done.has(i) ? 'solved' : ''}">
-        <div class="scrambled">${mixed}<span class="word-hint">${w.hint}</span></div>
-        <input autocomplete="off" spellcheck="false" aria-label="Lösung für ${mixed}" placeholder="Lösung…" ${done.has(i) ? `value="${w.word}" disabled` : ''}>
-        <button class="btn small teal" ${done.has(i) ? 'disabled' : ''}>${done.has(i) ? '✓' : 'Prüfen'}</button></form>`);
-      row.addEventListener('submit', (e) => {
+    game.words.forEach((w, i) => {
+      const done = !!w.solved;
+      const row = h(`<form class="word-row ${done ? 'solved' : ''}">
+        <div class="scrambled">${w.mix}<span class="word-hint">${w.hint}</span></div>
+        <input autocomplete="off" spellcheck="false" aria-label="Lösung für ${w.mix}" placeholder="Lösung…" ${done ? `value="${w.solved}" disabled` : ''}>
+        <button class="btn sm ice" ${done ? 'disabled' : ''}>${done ? '✓' : 'Prüfen'}</button></form>`);
+      row.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const inp = row.querySelector('input');
-        const guess = inp.value.toUpperCase().replace(/Ä/g, 'AE').replace(/Ö/g, 'OE').replace(/Ü/g, 'UE').replace(/[^A-Z]/g, '');
-        if (guess === w.word) {
-          done.add(i); row.classList.add('solved'); inp.disabled = true; inp.value = w.word;
-          const b = row.querySelector('button'); b.textContent = '✓'; b.disabled = true;
-          renderSlots(); if (done.size === words.length) onDone();
-        } else { row.classList.remove('shake'); void row.offsetWidth; row.classList.add('shake'); }
+        const inp = row.querySelector('input'), b = row.querySelector('button');
+        if (!inp.value.trim() || b.disabled) return;
+        b.disabled = true;
+        try {
+          const r = await call('guess', { i, word: inp.value });
+          if (r.correct) {
+            row.classList.add('solved'); inp.disabled = true; inp.value = r.game.words[i].solved; b.textContent = '✓';
+            slotBox.innerHTML = slots(r.game.len, r.game.revealed);
+            if (r.game.solved) onDone(r.game);
+          } else { b.disabled = false; row.classList.remove('shake'); void row.offsetWidth; row.classList.add('shake'); }
+        } catch (err) { b.disabled = false; toast(errText(err)); }
       });
       box.append(row);
     });
-    renderSlots();
+    slotBox.innerHTML = slots(game.len, game.revealed);
     el.append(box, slotBox);
   }
 
   // ---------- 4) Schiebepuzzle ----------
-  async function puzzleImage(answer, withCode) {
-    try { await document.fonts.load('900 60px "Cinzel Decorative"'); } catch (_) {}
+  let motifImg = null;
+  function loadMotif() {
+    if (!motifImg) motifImg = new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = 'img/puzzle-motiv.webp'; });
+    return motifImg;
+  }
+  // Puzzlebild: Club-Motiv vor Winter-Nachthimmel mit Polarlicht, unten das Code-Band
+  async function puzzleImage(code) {
+    try { await document.fonts.load('600 60px "Cormorant Garamond"'); } catch (_) {}
+    const motif = await loadMotif();
     const c = document.createElement('canvas'); c.width = c.height = 600; const g = c.getContext('2d');
-    const sky = g.createLinearGradient(0, 0, 0, 600); sky.addColorStop(0, '#120a2a'); sky.addColorStop(0.6, '#3a1f72'); sky.addColorStop(1, '#8a5bc0');
+    const sky = g.createLinearGradient(0, 0, 0, 600); sky.addColorStop(0, '#060a1c'); sky.addColorStop(0.55, '#14203f'); sky.addColorStop(1, '#2a1c3d');
     g.fillStyle = sky; g.fillRect(0, 0, 600, 600);
-    const r = seeded(42); g.fillStyle = '#fff';
-    for (let i = 0; i < 90; i++) { g.globalAlpha = 0.3 + r() * 0.7; g.beginPath(); g.arc(r() * 600, r() * 330, r() * 1.8 + 0.4, 0, 7); g.fill(); }
-    g.globalAlpha = 1; g.fillStyle = '#fff6d8'; g.beginPath(); g.arc(470, 90, 42, 0, 7); g.fill();
-    // Schloss
-    g.fillStyle = '#1b1240';
-    const tower = (x, w, top) => { g.fillRect(x, top, w, 600); g.beginPath(); g.moveTo(x - 8, top); g.lineTo(x + w / 2, top - w * 1.1); g.lineTo(x + w + 8, top); g.fill(); };
-    g.fillRect(120, 330, 360, 270); tower(90, 70, 260); tower(440, 70, 260); tower(250, 100, 190);
-    for (let x = 120; x < 480; x += 30) g.fillRect(x, 314, 18, 18);
-    g.fillStyle = '#ffd56a';
-    [[118, 300], [468, 300], [290, 240], [190, 390], [390, 390], [290, 330]].forEach(([x, y]) => { g.fillRect(x, y, 14, 22); });
-    g.fillStyle = '#eef3ff'; g.beginPath(); g.moveTo(0, 520); g.quadraticCurveTo(300, 470, 600, 520); g.lineTo(600, 600); g.lineTo(0, 600); g.fill();
+    // Polarlicht
+    [['rgba(80,220,200,0.32)', 120, -40], ['rgba(140,120,255,0.22)', 190, 30], ['rgba(242,180,90,0.18)', 250, 90]].forEach(([col, y, sh]) => {
+      const a = g.createLinearGradient(0, y - 90, 0, y + 90); a.addColorStop(0, 'rgba(0,0,0,0)'); a.addColorStop(0.5, col); a.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = a; g.beginPath(); g.moveTo(0, y + sh); g.bezierCurveTo(160, y - 80, 380, y + 90, 600, y - sh); g.lineTo(600, y - sh + 120); g.bezierCurveTo(380, y + 190, 160, y + 20, 0, y + sh + 120); g.fill();
+    });
+    const r = seeded(7); g.fillStyle = '#fff';
+    for (let i = 0; i < 120; i++) { g.globalAlpha = 0.25 + r() * 0.75; g.beginPath(); g.arc(r() * 600, r() * 420, r() * 1.6 + 0.3, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
+    // Glut hinter dem Motiv
+    const glow = g.createRadialGradient(300, 250, 20, 300, 250, 260); glow.addColorStop(0, 'rgba(242,172,85,0.55)'); glow.addColorStop(1, 'rgba(242,172,85,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, 600, 600);
+    if (motif) g.drawImage(motif, 40, 0, 520, 520);
+    // Schnee
+    g.fillStyle = '#e9f1ff'; g.beginPath(); g.moveTo(0, 540); g.quadraticCurveTo(300, 500, 600, 540); g.lineTo(600, 600); g.lineTo(0, 600); g.fill();
     // Code-Band
-    g.fillStyle = 'rgba(18,10,42,0.78)'; g.fillRect(0, 420, 600, 110);
-    g.strokeStyle = '#f4cf73'; g.lineWidth = 4; g.strokeRect(-4, 420, 608, 110);
-    if (!withCode) {
-      g.font = '700 40px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(244,207,115,0.55)';
-      g.fillText('❄  ?  ?  ?  ❄', 300, 478);
-      return c.toDataURL('image/png');
-    }
-    g.font = '900 78px "Cinzel Decorative", Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.shadowColor = '#f4cf73'; g.shadowBlur = 18; g.fillStyle = '#ffe9a8';
-    g.fillText(answer.split('').join(' '), 300, 478);
+    g.fillStyle = 'rgba(8,10,24,0.82)'; g.fillRect(0, 432, 600, 96);
+    g.strokeStyle = '#f2b45a'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 432); g.lineTo(600, 432); g.moveTo(0, 528); g.lineTo(600, 528); g.stroke();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (!code) { g.font = '600 40px "Cormorant Garamond", Georgia, serif'; g.fillStyle = 'rgba(242,180,90,0.6)'; g.fillText('❄   ?   ?   ?   ❄', 300, 482); }
+    else { g.font = '700 70px "Cormorant Garamond", Georgia, serif'; g.shadowColor = '#f2b45a'; g.shadowBlur = 18; g.fillStyle = '#ffe2a8'; g.fillText(code.split('').join(' '), 300, 484); }
     return c.toDataURL('image/png');
   }
-  async function slidepuzzle(el, { answer, solved, onDone }) {
+  async function slidepuzzle(el, { game, call, onDone, toast }) {
     el.innerHTML = '<div class="loading"><div><div class="spinner"></div>Puzzle wird gezaubert…</div></div>';
-    const img = await puzzleImage(answer, false);
-    const solvedImg = await puzzleImage(answer, true);
+    const img = await puzzleImage(game.solved ? game.revealed : '');
     const N = 3, EMPTY = N * N - 1;
-    let pos = [...Array(N * N).keys()]; // pos[tile] = Zelle
-    let moves = 0, isSolved = !!solved;
+    let pos = game.solved ? [...Array(N * N).keys()] : [...game.pos]; // pos[tile] = Zelle
+    let moves = 0, isSolved = !!game.solved, history = [];
     const neighbors = (cell) => [cell - N, cell + N, cell % N ? cell - 1 : -1, (cell + 1) % N ? cell + 1 : -1].filter((c) => c >= 0 && c < N * N);
-    // Kürzeste Lösung vom aktuellen Stand (Breitensuche, 3×3 ist winzig)
+    // Kürzeste Lösung vom aktuellen Stand (für den Tipp-Knopf)
     function solve(start) {
       const key = (p) => p.join(','), goal = key([...Array(N * N).keys()]);
       const prev = new Map([[key(start), null]]); let q = [start];
@@ -229,21 +236,6 @@
       }
       return [];
     }
-    if (!isSolved) {
-      // Mittelschwer mischen: kürzeste Lösung 10–14 Züge (vorher ~22, zu schwer für Einsteiger)
-      let d = 0;
-      do {
-        pos = [...Array(N * N).keys()];
-        let prev = -1;
-        for (let i = 0; i < 40; i++) {
-          const empty = pos[EMPTY];
-          const opts = neighbors(empty).filter((c) => c !== prev);
-          const target = opts[Math.floor(Math.random() * opts.length)];
-          const t = pos.indexOf(target); pos[t] = empty; pos[EMPTY] = target; prev = empty;
-        }
-        d = solve(pos).length;
-      } while (d < 10 || d > 14);
-    }
     el.innerHTML = '';
     const wrap = h(`<div class="slide-wrap"></div>`);
     const board = h(`<div class="slide ${isSolved ? 'solved' : ''}"></div>`);
@@ -255,7 +247,7 @@
     const tiles = [];
     for (let t = 0; t < N * N; t++) {
       const b = h(`<button class="tile" aria-label="Puzzleteil ${t + 1}"></button>`);
-      b.style.backgroundImage = `url(${isSolved ? solvedImg : img})`;
+      b.style.backgroundImage = `url(${img})`;
       b.style.backgroundPosition = `${(t % N) * 50}% ${Math.floor(t / N) * 50}%`;
       b.addEventListener('click', () => move(t));
       tiles.push(b); board.append(b);
@@ -272,16 +264,23 @@
       updateHint();
       meta.textContent = isSolved ? 'Das Bild ist wieder ganz! Lest den Code im Bild ✨' : `Züge: ${moves}`;
     };
+    async function finish() {
+      // Der Server spielt die Züge nach und gibt erst dann den Code heraus
+      meta.textContent = 'Der Code erscheint …';
+      try {
+        const r = await call('solve', { moves: history });
+        isSolved = true; board.classList.add('solved');
+        const solvedImg = await puzzleImage(r.game.revealed);
+        tiles.forEach((tb) => { tb.style.backgroundImage = `url(${solvedImg})`; });
+        render(); onDone(r.game);
+      } catch (e) { toast(errText(e)); render(); }
+    }
     function move(t) {
       if (isSolved || t === EMPTY) return;
       if (!neighbors(pos[EMPTY]).includes(pos[t])) return;
-      [pos[t], pos[EMPTY]] = [pos[EMPTY], pos[t]]; moves++;
-      if (pos.every((p, i) => p === i)) {
-        isSolved = true; board.classList.add('solved');
-        tiles.forEach((tb) => { tb.style.backgroundImage = `url(${solvedImg})`; });
-        onDone();
-      }
+      [pos[t], pos[EMPTY]] = [pos[EMPTY], pos[t]]; moves++; history.push(t);
       render();
+      if (pos.every((p, i) => p === i)) finish();
     }
     // Tipps: höchstens 2, der erste ab Zug 10, der zweite frühestens 5 Züge später
     const HINT_MAX = 2, HINT_FIRST = 10, HINT_GAP = 5;
@@ -308,5 +307,5 @@
     el.append(wrap, meta);
   }
 
-  window.GAMES = { memory, detective, wordscramble, slidepuzzle, ICONS, slots };
+  window.GAMES = { memory, detective, wordscramble, slidepuzzle, ICONS, slots, puzzleImage };
 })();

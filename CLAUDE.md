@@ -15,6 +15,8 @@
 - Keine Orte, Rätsellösungen oder Codes in Commit-Nachrichten oder im README.
 
 ## Projekt
-- Statische Website in `docs/`. Auf dem Server läuft nur nginx, **kein Node.js**. Deployment: `deploy/README.md`.
+- Website: statische Dateien in `docs/`. Spiel-Server: `server/api.php` (PHP 8 + SQLite, über nginx/PHP-FPM unter `/api`). **Kein Node.js** auf dem Server. Deployment: `deploy/README.md`, Einrichtung des Spiel-Servers: `deploy/setup-backend.sh`.
+- Alle Lösungen und Codes liegen nur auf dem Server (DB `/var/lib/winterevent/event.sqlite`, Einstellungen `/etc/winterevent/config.php`). Der Browser darf keine Lösungen bekommen – jede Spielaktion prüft der Server.
+- Clubs legt die Eventleitung live im Admin-Bereich `/admin/` an.
+- Testwerkzeug „Test: Lösung“ (nur für angemeldete Admins, `test_tools` in der Server-Konfiguration) ist **vorübergehend** und soll vor dem Event wieder raus.
 - Live: https://winterevent.enchantedhawks.eu (Server von enchantedhawks.eu, Update per `deploy/update.sh`).
-- Codes erzeugt die Eventleitung selbst mit `tools/code-generator.html` (Format v2: Ortsinfos nur verschlüsselt).

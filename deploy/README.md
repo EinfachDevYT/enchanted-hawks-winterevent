@@ -115,10 +115,26 @@ sudo certbot renew --dry-run
 
 ---
 
+## Schritt 5b: Spiel-Server einrichten (PHP)
+
+Der Spiel-Server prüft Codes und Spielzüge und liefert die Live-Daten für den Admin-Bereich. Ein Befehl richtet alles ein (PHP-FPM, SQLite, nginx-Anbindung):
+
+```bash
+sudo /var/www/enchanted-hawks-winterevent/deploy/setup-backend.sh
+```
+
+Das Skript fragt beim ersten Mal:
+- das **Admin-Passwort** für die Eventleitung (wird nur als Hash gespeichert),
+- die **vier Zahlen** für den ersten Tresor.
+
+Es legt `/etc/winterevent/config.php` (Einstellungen) und `/var/lib/winterevent/` (Datenbank) an und fügt in die nginx-Konfiguration eine `include`-Zeile ein. Die HTTPS-Einstellungen von certbot bleiben dabei unangetastet, und vorher wird eine Sicherungskopie angelegt. Mehrfach ausführen ist ungefährlich.
+
+> 🧪 Nach der Einrichtung ist der **Testmodus** an (`'test_tools' => true` in `/etc/winterevent/config.php`). Angemeldete Admins sehen dann auf der Spielseite einen Knopf „Test: Lösung“. **Vor dem Event** in der Datei auf `false` ändern und `sudo systemctl reload php*-fpm` ausführen.
+
 ## Schritt 6: Testen
 
 1. Öffne `https://winterevent.enchantedhawks.eu`
-2. Gib einen Startcode aus deiner geheimen `CODES.md` ein.
+2. Unter `https://winterevent.enchantedhawks.eu/admin/` anmelden, einen Test-Club anlegen und dessen Startcode auf der Spielseite eingeben.
 3. Öffne den ersten Tresor mit den vier Zahlen. Der 3D-Tresor sollte sich öffnen.
 
 Danach kannst du bei Cloudflare die Wolke wieder auf **orange** stellen. Wähle dann unter SSL/TLS den Modus **Full (strict)**.
@@ -135,11 +151,17 @@ sudo /var/www/enchanted-hawks-winterevent/deploy/update.sh
 
 Das Skript übernimmt exakt den Stand von GitHub, prüft nginx und lädt neu. Dateien auf dem Server deshalb nie von Hand ändern, sie werden beim nächsten Update überschrieben. Die Spieler bekommen die neue Version beim nächsten Neuladen (eigene Dateien werden nie lange gecacht).
 
-### Neue Codes erzeugen
+### Clubs und Codes anlegen
 
-Codes werden **nicht auf dem Server** erzeugt, sondern mit dem Code-Generator (`tools/code-generator.html`) lokal im Browser. Anleitung: siehe [README im Hauptordner](../README.md#codes-erzeugen-eventleitung).
+Clubs legt die Eventleitung **live im Admin-Bereich** an: `https://winterevent.enchantedhawks.eu/admin/` → Clubname → *Erstellen*. Der Startcode funktioniert sofort, ohne Upload oder Update.
 
-Kurzfassung: Club eintragen → *Website-Datei erzeugen* → `data.js` auf GitHub in `docs/` hochladen → auf dem Server `update.sh` ausführen.
+### Spielstände sichern
+
+Alle Clubs und Spielstände liegen in `/var/lib/winterevent/event.sqlite`. Eine Sicherung ist einfach eine Kopie dieser Datei:
+
+```bash
+sudo cp /var/lib/winterevent/event.sqlite ~/winterevent-backup-$(date +%F).sqlite
+```
 
 ---
 
@@ -163,6 +185,8 @@ Kurzfassung: Club eintragen → *Website-Datei erzeugen* → `data.js` auf GitHu
 | Problem | Lösung |
 |---|---|
 | `certbot` meldet `unauthorized` … `acme-challenge` … `404` | Alte Version der Konfiguration. Die Regel für versteckte Dateien hat `/.well-known/` blockiert. Mit `update.sh` den neuen Stand holen, die Konfiguration erneut nach `/etc/nginx/sites-available/` kopieren, nginx neu laden und certbot nochmal starten. |
+| Seite meldet „Der Spielserver ist gerade nicht erreichbar“ | `deploy/setup-backend.sh` noch nicht ausgeführt, oder PHP-FPM läuft nicht: `sudo systemctl status php*-fpm`. Log: `sudo tail -n 30 /var/log/nginx/winterevent.error.log` |
+| Admin-Passwort vergessen | `sudo rm /etc/winterevent/config.php` und `setup-backend.sh` erneut ausführen. Clubs und Spielstände bleiben erhalten, nur die Anmeldungen laufen ab. |
 | `update.sh` meldet „Your local changes … would be overwritten“ | Alte Version von `update.sh`. Einmal `cd /var/www/enchanted-hawks-winterevent && sudo git fetch origin && sudo git reset --hard origin/main` ausführen. Die neue Version übernimmt den GitHub-Stand immer exakt. |
 | `certbot` meldet „DNS problem“ | Der DNS-Eintrag aus Schritt 1 greift noch nicht. Mit `dig` prüfen und warten. Bei Cloudflare die Wolke auf grau stellen. |
 | Seite zeigt „Bitte öffnet die Seite über https“ | HTTPS ist noch nicht eingerichtet (Schritt 5). |
