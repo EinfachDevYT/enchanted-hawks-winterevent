@@ -248,9 +248,8 @@
     const wrap = h(`<div class="slide-wrap"></div>`);
     const board = h(`<div class="slide ${isSolved ? 'solved' : ''}"></div>`);
     const side = h(`<div class="slide-side">
-      <div class="slide-ref"><span>So soll es aussehen</span><img alt="Vorlage für das Puzzle" src="${img}"></div>
       <button class="btn ghost sm" type="button" data-hint disabled></button>
-      <p class="slide-help">Klickt ein leuchtendes Teil neben der Lücke an, dann rutscht es hinein. Baut das Bild wie in der Vorlage nach.</p>
+      <p class="slide-help">Klickt ein leuchtendes Teil neben der Lücke an, dann rutscht es hinein. Setzt das Bild wieder richtig zusammen.</p>
     </div>`);
     const meta = h(`<div class="game-meta"></div>`);
     const tiles = [];
@@ -284,8 +283,8 @@
       }
       render();
     }
-    // Tipps: höchstens 2, der erste ab Zug 20, der zweite frühestens 10 Züge später
-    const HINT_MAX = 2, HINT_FIRST = 20, HINT_GAP = 10;
+    // Tipps: höchstens 2, der erste ab Zug 10, der zweite frühestens 5 Züge später
+    const HINT_MAX = 2, HINT_FIRST = 10, HINT_GAP = 5;
     let hintsUsed = 0, lastHintAt = -Infinity;
     const hintBtn = side.querySelector('[data-hint]');
     const nextHintAt = () => Math.max(HINT_FIRST, lastHintAt + HINT_GAP);
