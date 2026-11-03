@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS progress(team_id INTEGER NOT NULL REFERENCES teams(id
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, team_id INTEGER, at INTEGER, type TEXT, stage INTEGER, info TEXT);
 CREATE TABLE IF NOT EXISTS hits(k TEXT, at INTEGER);
 CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS helpers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, created_by TEXT, created_at INTEGER, active INTEGER NOT NULL DEFAULT 1);
 CREATE INDEX IF NOT EXISTS hits_k ON hits(k, at);');
 
 function q(string $sql, array $p = []): PDOStatement { global $db; $s = $db->prepare($sql); $s->execute($p); return $s; }
@@ -75,17 +76,20 @@ function teamFromToken(?string $tok): ?array {
   if (!hash_equals(sign($data), $s) || !str_starts_with($data, 't.')) return null;
   return q('SELECT * FROM teams WHERE id = ?', [(int) substr($data, 2)])->fetch() ?: null;
 }
-function adminToken(string $name): string { $d = 'a.' . (time() + 14 * 3600) . '.' . b64u($name); return b64u($d) . '.' . sign($d); }
-function adminFromToken(?string $tok): ?string {
+// Rollen: 'a' = Eventleitung (alles), 'h' = Helfer (nur Live-Übersicht und Ankünfte bestätigen)
+function staffToken(string $role, string $name, int $hid = 0): string { $d = $role . '.' . (time() + 14 * 3600) . '.' . $hid . '.' . b64u($name); return b64u($d) . '.' . sign($d); }
+function staffFromToken(?string $tok): ?array {
   if (!$tok || !str_contains($tok, '.')) return null;
   [$d, $s] = explode('.', $tok, 2); $data = ub64u($d);
   if (!hash_equals(sign($data), $s)) return null;
-  $p = explode('.', $data, 3);
-  if (count($p) !== 3 || $p[0] !== 'a' || (int) $p[1] < time()) return null;
-  return ub64u($p[2]);
+  $p = explode('.', $data, 4);
+  if (count($p) !== 4 || !in_array($p[0], ['a', 'h'], true) || (int) $p[1] < time()) return null;
+  if ($p[0] === 'h' && !q('SELECT 1 FROM helpers WHERE id = ? AND active = 1', [(int) $p[2]])->fetchColumn()) return null; // entfernte Helfer sofort aussperren
+  return ['role' => $p[0], 'name' => ub64u($p[3])];
 }
 function needTeam(): array { global $in; $t = teamFromToken($in['token'] ?? null); if (!$t) fail('Bitte neu anmelden.', 401); return $t; }
-function needAdmin(): string { global $in; $n = adminFromToken($in['admin'] ?? null); if ($n === null) fail('Admin-Anmeldung abgelaufen. Bitte neu anmelden.', 401); return $n; }
+function needStaff(): array { global $in; $u = staffFromToken($in['admin'] ?? null); if ($u === null) fail('Anmeldung abgelaufen. Bitte neu anmelden.', 401); return $u; }
+function needAdmin(): string { $u = needStaff(); if ($u['role'] !== 'a') fail('Das darf nur die Eventleitung.', 403); return $u['name']; }
 
 // ---------- Spiel-Logik ----------
 function stationInfo(int $k): array {
@@ -162,7 +166,7 @@ function teamState(array $team): array {
   foreach ($rows as $k => $r) {
     if ($r['unlocked_at']) { $max = max($max, $k); $stations[$k] = stationInfo($k); if ($k < $LAST) $games[$k] = gamePublic($r); }
     $p = ['unlocked' => (bool) $r['unlocked_at'], 'solved' => (bool) $r['solved_at'], 'opened' => (bool) $r['opened_at']];
-    if ($r['opened_at'] && $k < $LAST) { $p['nextCode'] = q('SELECT code FROM codes WHERE team_id = ? AND stage = ?', [$team['id'], $k + 1])->fetchColumn(); $stations[$k + 1] = stationInfo($k + 1); }
+    if ($r['opened_at'] && $k < $LAST) $stations[$k + 1] = stationInfo($k + 1); // nächstes Ziel bekannt, Freischaltung nur durch Eventleiter
     $prog[$k] = $p;
   }
   $s = ['ok' => true, 'team' => $team['name'], 'count' => $COUNT, 'stage' => $max, 'stations' => (object) $stations, 'progress' => (object) $prog, 'games' => (object) $games];
@@ -176,12 +180,12 @@ function markSolved(array $team, array $row): void {
   event((int) $team['id'], 'solved', (int) $row['stage']);
 }
 function saveGame(array $team, int $k, array $g): void { q('UPDATE progress SET game = ? WHERE team_id = ? AND stage = ?', [json_encode($g), $team['id'], $k]); }
-function unlock(array $team, int $k): void {
+function unlock(array $team, int $k, string $by = ''): void {
   global $LAST;
   $r = q('SELECT * FROM progress WHERE team_id = ? AND stage = ?', [$team['id'], $k])->fetch();
   if ($r['unlocked_at']) return;
   q('UPDATE progress SET unlocked_at = ? WHERE team_id = ? AND stage = ?', [now(), $team['id'], $k]);
-  event((int) $team['id'], 'unlock', $k);
+  event((int) $team['id'], $k === 0 ? 'start' : 'arrive', $k, $by);
   if ($k === $LAST && !$team['finished_at']) {
     q('UPDATE teams SET finished_at = ? WHERE id = ?', [now(), $team['id']]);
     event((int) $team['id'], 'finish', $k);
@@ -194,22 +198,16 @@ switch ($a) {
     out(['ok' => true, 'eventName' => $C['eventName'], 'clubName' => $C['clubName'], 'subtitle' => $C['subtitle'], 'count' => $COUNT,
       'mapImage' => $C['mapImage'], 'mapSize' => $C['mapSize'], 'mapView' => $C['mapView']]);
 
-  case 'login': // Startcode oder Ortscode
+  case 'login': // nur mit Startcode – auch zum Weiterspielen auf einem anderen Gerät
     limit('login:' . $ip, 30, 60);
     $code = norm((string) ($in['code'] ?? ''));
-    $row = $code ? q('SELECT c.*, t.name FROM codes c JOIN teams t ON t.id = c.team_id WHERE REPLACE(c.code, \'-\', \'\') = ?', [$code])->fetch() : null;
-    if (!$row) fail('Diesen Code kennen wir nicht. Prüft die Schreibweise.', 404);
-    $k = (int) $row['stage']; $tid = (int) $row['team_id'];
-    $cur = teamFromToken($in['token'] ?? null);
-    if ($cur && (int) $cur['id'] !== $tid && !empty($in['unlockOnly'])) fail('Dieser Code gehört zu einem anderen Team!', 403);
-    if ($k > 0) { // Ortscode gilt erst, wenn der Tresor davor geöffnet wurde
-      $prev = q('SELECT opened_at FROM progress WHERE team_id = ? AND stage = ?', [$tid, $k - 1])->fetchColumn();
-      if (!$prev) fail('Diesen Ort habt ihr noch nicht erreicht.', 403);
-    }
+    $row = $code ? q('SELECT c.* FROM codes c WHERE c.stage = 0 AND REPLACE(c.code, \'-\', \'\') = ?', [$code])->fetch() : null;
+    if (!$row) fail('Diesen Startcode kennen wir nicht. Prüft die Schreibweise.', 404);
+    $tid = (int) $row['team_id'];
     $team = q('SELECT * FROM teams WHERE id = ?', [$tid])->fetch();
-    unlock($team, $k);
+    unlock($team, 0);
     $team = q('SELECT * FROM teams WHERE id = ?', [$tid])->fetch();
-    out(teamState($team) + ['token' => teamToken($tid), 'unlocked' => $k]);
+    out(teamState($team) + ['token' => teamToken($tid)]);
 
   case 'state':
     out(teamState(needTeam()));
@@ -225,8 +223,7 @@ switch ($a) {
       q('UPDATE progress SET opened_at = ? WHERE team_id = ? AND stage = ?', [now(), $team['id'], $k]);
       event((int) $team['id'], 'opened', $k);
     }
-    $next = q('SELECT code FROM codes WHERE team_id = ? AND stage = ?', [$team['id'], $k + 1])->fetchColumn();
-    out(['ok' => true, 'nextCode' => $next, 'next' => stationInfo($k + 1)] + ['state' => teamState($team)]);
+    out(['ok' => true, 'next' => stationInfo($k + 1)] + ['state' => teamState($team)]);
   }
 
   case 'game': {
@@ -304,10 +301,17 @@ switch ($a) {
     $name = trim(mb_substr((string) ($in['name'] ?? ''), 0, 40));
     if ($name === '') fail('Bitte gib deinen Namen ein.');
     if (!password_verify((string) ($in['password'] ?? ''), (string) $CFG['admin_password_hash'])) fail('Falsches Passwort.', 401);
-    out(['ok' => true, 'admin' => adminToken($name), 'name' => $name, 'testTools' => testMode()]);
+    out(['ok' => true, 'admin' => staffToken('a', $name), 'name' => $name, 'role' => 'a', 'testTools' => testMode()]);
+
+  case 'helper_login': // Helfer melden sich mit ihrem persönlichen Helfer-Code an
+    limit('admin:' . $ip, 10, 60);
+    $code = norm((string) ($in['code'] ?? ''));
+    $h = $code ? q('SELECT * FROM helpers WHERE active = 1 AND REPLACE(code, \'-\', \'\') = ?', [$code])->fetch() : null;
+    if (!$h) fail('Diesen Helfer-Code kennen wir nicht.', 401);
+    out(['ok' => true, 'admin' => staffToken('h', $h['name'], (int) $h['id']), 'name' => $h['name'], 'role' => 'h', 'testTools' => false]);
 
   case 'admin_overview': {
-    needAdmin();
+    $me = needStaff(); $isAdmin = $me['role'] === 'a';
     $teams = q('SELECT * FROM teams ORDER BY created_at')->fetchAll(); $list = [];
     foreach ($teams as $t) {
       $rows = rows((int) $t['id']); $stage = -1; $last = (int) $t['created_at']; $times = [];
@@ -316,7 +320,7 @@ switch ($a) {
         foreach (['unlocked_at', 'solved_at', 'opened_at'] as $f) if ($r[$f]) $last = max($last, (int) $r[$f]);
         $times[$k] = ['unlocked' => $r['unlocked_at'] ? (int) $r['unlocked_at'] : null, 'opened' => $r['opened_at'] ? (int) $r['opened_at'] : null];
       }
-      $list[] = ['id' => (int) $t['id'], 'name' => $t['name'], 'startCode' => q('SELECT code FROM codes WHERE team_id = ? AND stage = 0', [$t['id']])->fetchColumn(),
+      $list[] = ['id' => (int) $t['id'], 'name' => $t['name'], 'startCode' => $isAdmin ? q('SELECT code FROM codes WHERE team_id = ? AND stage = 0', [$t['id']])->fetchColumn() : null,
         'createdBy' => $t['created_by'], 'createdAt' => (int) $t['created_at'], 'stage' => $stage, 'stageName' => $stage >= 0 ? $ST[$stage]['name'] : null,
         'waiting' => $stage >= 0 && $stage < $LAST && !empty($rows[$stage]['opened_at']), 'finishedAt' => $t['finished_at'] ? (int) $t['finished_at'] : null,
         'rank' => $t['finished_at'] ? rankOf($t) : null, 'lastActivity' => $last, 'times' => $times];
@@ -324,7 +328,8 @@ switch ($a) {
     $ev = q('SELECT e.*, t.name FROM events e LEFT JOIN teams t ON t.id = e.team_id WHERE e.type != \'vault_fail\' ORDER BY e.id DESC LIMIT 40')->fetchAll();
     out(['ok' => true, 'now' => now(), 'count' => $COUNT, 'stations' => array_map(fn($s) => $s['name'], $ST), 'teams' => $list,
       'events' => array_map(fn($e) => ['at' => (int) $e['at'], 'team' => $e['name'], 'type' => $e['type'], 'stage' => (int) $e['stage'], 'station' => $ST[(int) $e['stage']]['name'] ?? '', 'info' => $e['info']], $ev),
-      'siteUrl' => $CFG['site_url'] ?? '', 'testTools' => testMode()]);
+      'siteUrl' => $CFG['site_url'] ?? '', 'testTools' => testMode(), 'role' => $me['role'],
+      'helpers' => $isAdmin ? array_map(fn($h) => ['id' => (int) $h['id'], 'name' => $h['name'], 'code' => $h['code'], 'createdBy' => $h['created_by']], q('SELECT * FROM helpers WHERE active = 1 ORDER BY name COLLATE NOCASE')->fetchAll()) : null]);
   }
 
   case 'admin_create': {
@@ -357,6 +362,35 @@ switch ($a) {
     out(['ok' => true, 'testTools' => $on]);
   }
 
+  case 'admin_arrive': { // Eventleiter oder Helfer bestätigt: Club steht im Spiel am Ort
+    $by = needStaff()['name']; $tid = (int) ($in['id'] ?? 0); $k = (int) ($in['stage'] ?? -1);
+    $team = q('SELECT * FROM teams WHERE id = ?', [$tid])->fetch();
+    if (!$team || $k < 1 || $k > $LAST) fail('Unbekannter Club oder Ort.');
+    $prev = q('SELECT opened_at FROM progress WHERE team_id = ? AND stage = ?', [$tid, $k - 1])->fetchColumn();
+    if (!$prev) fail("{$team['name']} hat den Tresor davor noch nicht geöffnet.", 409);
+    if (q('SELECT unlocked_at FROM progress WHERE team_id = ? AND stage = ?', [$tid, $k])->fetchColumn()) fail("{$team['name']} ist dort schon angekommen.", 409);
+    unlock($team, $k, $by);
+    out(['ok' => true]);
+  }
+
+  case 'admin_helper_create': {
+    $by = needAdmin();
+    $name = trim(preg_replace('/\s+/', ' ', mb_substr((string) ($in['name'] ?? ''), 0, 40)));
+    if ($name === '') fail('Bitte einen Namen eingeben.');
+    do { $code = 'HELFER-' . randCode(); } while (q('SELECT 1 FROM helpers WHERE code = ?', [$code])->fetchColumn());
+    q('INSERT INTO helpers(name, code, created_by, created_at) VALUES(?,?,?,?)', [$name, $code, $by, now()]);
+    event(null, 'helper_add', 0, $by . '|' . $name);
+    out(['ok' => true, 'name' => $name, 'code' => $code]);
+  }
+
+  case 'admin_helper_delete': {
+    $by = needAdmin(); $id = (int) ($in['id'] ?? 0);
+    $name = q('SELECT name FROM helpers WHERE id = ?', [$id])->fetchColumn();
+    q('UPDATE helpers SET active = 0 WHERE id = ?', [$id]);
+    if ($name) event(null, 'helper_del', 0, $by . '|' . $name);
+    out(['ok' => true]);
+  }
+
   case 'admin_delete':
     needAdmin(); q('DELETE FROM teams WHERE id = ?', [(int) ($in['id'] ?? 0)]); out(['ok' => true]);
 
@@ -369,9 +403,10 @@ switch ($a) {
 
   case 'admin_codes': { // alle Codes eines Clubs (für Hilfe vor Ort)
     needAdmin(); $tid = (int) ($in['id'] ?? 0); $res = [];
-    foreach (rows($tid) as $k => $r) $res[] = ['station' => $ST[$k]['name'], 'code' => q('SELECT code FROM codes WHERE team_id = ? AND stage = ?', [$tid, $k])->fetchColumn(), 'tresor' => $k < $LAST ? answerOf($r) : null];
+    foreach (rows($tid) as $k => $r) $res[] = ['station' => $ST[$k]['name'], 'tresor' => $k < $LAST ? answerOf($r) : null];
+    $start = q('SELECT code FROM codes WHERE team_id = ? AND stage = 0', [$tid])->fetchColumn();
     $z = q('SELECT zielcode FROM teams WHERE id = ?', [$tid])->fetchColumn();
-    out(['ok' => true, 'codes' => $res, 'zielcode' => $z]);
+    out(['ok' => true, 'codes' => $res, 'zielcode' => $z, 'startCode' => $start]);
   }
 }
 

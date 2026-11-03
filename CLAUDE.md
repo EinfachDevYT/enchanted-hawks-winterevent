@@ -17,6 +17,6 @@
 ## Projekt
 - Website: statische Dateien in `docs/`. Spiel-Server: `server/api.php` (PHP 8 + SQLite, über nginx/PHP-FPM unter `/api`). **Kein Node.js** auf dem Server. Deployment: `deploy/README.md`, Einrichtung des Spiel-Servers: `deploy/setup-backend.sh`.
 - Alle Lösungen und Codes liegen nur auf dem Server (DB `/var/lib/winterevent/event.sqlite`, Einstellungen `/etc/winterevent/config.php`). Der Browser darf keine Lösungen bekommen – jede Spielaktion prüft der Server.
-- Clubs legt die Eventleitung live im Admin-Bereich `/admin/` an.
+- Clubs legt die Eventleitung live im Admin-Bereich `/admin/` an. Es gibt keine Ortscodes: Die Ankunft an jedem Ort bestätigt ein Eventleiter oder Helfer (Rolle mit eigenem Helfer-Code, darf nur bestätigen und die Live-Übersicht sehen).
 - Testwerkzeug „Test: Lösung“ (nur für angemeldete Admins, Schalter „Testmodus“ im Admin-Bereich, Startwert `test_tools` in der Server-Konfiguration) ist **vorübergehend** und soll vor dem Event wieder raus.
 - Live: https://winterevent.enchantedhawks.eu (Server von enchantedhawks.eu, Update per `deploy/update.sh`).

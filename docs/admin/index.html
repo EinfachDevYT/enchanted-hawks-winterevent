@@ -29,20 +29,38 @@
     <!-- Anmeldung -->
     <section class="card login" id="loginView">
       <h1>Eventleitung</h1>
-      <p class="muted">Melde dich an, um Clubs anzulegen und das Event live zu verfolgen.</p>
-      <form id="loginForm" class="stack" autocomplete="on">
-        <label>Dein Name<input id="name" name="username" autocomplete="username" maxlength="40" required></label>
-        <label>Passwort<input id="password" type="password" autocomplete="current-password" required></label>
-        <button class="primary">Anmelden</button>
-        <div class="msg" id="loginMsg" role="status"></div>
+      <p class="muted">Melde dich an, um Ankünfte zu bestätigen und das Event live zu verfolgen.</p>
+      <form id="helperForm" class="stack" autocomplete="off">
+        <label>Helfer-Code<input id="helperCode" placeholder="HELFER-…" autocapitalize="characters" spellcheck="false"></label>
+        <button class="primary">Als Helfer anmelden</button>
+        <div class="msg" id="helperMsg" role="status"></div>
       </form>
+      <details class="lead-login">
+        <summary>Anmeldung für die Eventleitung (mit Passwort)</summary>
+        <form id="loginForm" class="stack" autocomplete="on">
+          <label>Dein Name<input id="name" name="username" autocomplete="username" maxlength="40" required></label>
+          <label>Passwort<input id="password" type="password" autocomplete="current-password" required></label>
+          <button class="ghost">Anmelden</button>
+          <div class="msg" id="loginMsg" role="status"></div>
+        </form>
+      </details>
     </section>
 
     <!-- Dashboard -->
     <div id="dash" hidden>
+      <section class="card arrivals">
+        <div class="row between">
+          <h2>Unterwegs zu dir</h2>
+          <label class="inline">Ich stehe an:
+            <select id="myStation"></select>
+          </label>
+        </div>
+        <div id="arrivals"></div>
+      </section>
+
       <section class="stats" id="stats"></section>
 
-      <section class="card">
+      <section class="card admin-only">
         <h2>Club anlegen</h2>
         <form class="row" id="createForm" autocomplete="off">
           <input id="clubName" placeholder="Clubname, z. B. Silver Riders" maxlength="60" aria-label="Clubname">
@@ -58,7 +76,7 @@
           <span class="muted small" id="updated"></span>
         </div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Platz</th><th>Club</th><th>Fortschritt</th><th>Gerade</th><th>Zuletzt aktiv</th><th>Startcode</th><th class="right">Aktionen</th></tr></thead>
+          <thead><tr><th>Platz</th><th>Club</th><th>Fortschritt</th><th>Gerade</th><th>Zuletzt aktiv</th><th class="admin-only">Startcode</th><th class="right admin-only">Aktionen</th></tr></thead>
           <tbody id="teams"></tbody>
         </table></div>
       </section>
@@ -68,7 +86,18 @@
         <ol class="feed" id="feed"></ol>
       </section>
 
-      <section class="card test" id="testCard">
+      <section class="card admin-only">
+        <h2>Helfer</h2>
+        <p class="muted">Jeder Helfer bekommt einen eigenen Code. Helfer können Ankünfte bestätigen und die Live-Übersicht sehen, aber keine Clubs anlegen, löschen oder Codes einsehen.</p>
+        <form class="row" id="helperCreate" autocomplete="off">
+          <input id="helperName" placeholder="Name des Helfers, z. B. Mia" maxlength="40" aria-label="Name des Helfers">
+          <button class="primary">Helfer hinzufügen</button>
+        </form>
+        <div class="msg" id="helperCreateMsg" role="status"></div>
+        <div class="table-wrap"><table><thead><tr><th>Helfer</th><th>Helfer-Code</th><th>Angelegt von</th><th class="right">Aktionen</th></tr></thead><tbody id="helpers"></tbody></table></div>
+      </section>
+
+      <section class="card test admin-only" id="testCard">
         <div class="row between">
           <h2>🧪 Testmodus</h2>
           <button class="switch" id="testToggle" role="switch" aria-checked="false" aria-label="Testmodus umschalten"><span></span></button>
@@ -81,7 +110,7 @@
   <dialog id="codesDlg">
     <form method="dialog">
       <h2 id="codesTitle">Codes</h2>
-      <div class="table-wrap"><table><thead><tr><th>Station</th><th>Ortscode</th><th>Tresorcode</th></tr></thead><tbody id="codesBody"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Station</th><th>Tresorcode</th></tr></thead><tbody id="codesBody"></tbody></table></div>
       <p class="muted small" id="codesZiel"></p>
       <button class="ghost">Schließen</button>
     </form>

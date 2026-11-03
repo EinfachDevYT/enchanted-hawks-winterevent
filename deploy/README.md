@@ -155,6 +155,8 @@ Das Skript übernimmt exakt den Stand von GitHub, prüft nginx und lädt neu. Da
 
 Clubs legt die Eventleitung **live im Admin-Bereich** an: `https://winterevent.enchantedhawks.eu/admin/` → Clubname → *Erstellen*. Der Startcode funktioniert sofort, ohne Upload oder Update.
 
+Helfer fügt die Eventleitung dort ebenfalls hinzu (Name → *Helfer hinzufügen*). Jeder Helfer meldet sich mit seinem eigenen Helfer-Code an und bestätigt die Ankünfte an seinem Ort.
+
 ### Spielstände sichern
 
 Alle Clubs und Spielstände liegen in `/var/lib/winterevent/event.sqlite`. Eine Sicherung ist einfach eine Kopie dieser Datei:

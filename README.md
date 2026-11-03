@@ -9,25 +9,34 @@ Sechs Stationen mit Rätseln und Minispielen (Memory, Suchbild, Buchstabensalat,
 
 1. Der Club bekommt per DM seinen **Startcode** (`HAWK-…`) und gibt ihn auf der Website ein.
 2. An jeder Station gibt es ein Rätsel oder Minispiel. Die Lösung ist der **Tresorcode**.
-3. Der Tresor öffnet sich und zeigt den **Ortscode** für den nächsten Ort.
-4. Das Team reitet im Spiel dorthin und schaltet den Ort mit dem Ortscode frei.
+3. Der Tresor öffnet sich und verrät das **nächste Ziel**.
+4. Das Team reitet im Spiel dorthin. Ein **Eventleiter oder Helfer vor Ort** bestätigt die Ankunft im Admin-Bereich, dann geht es auf der Website automatisch weiter.
 5. Am Ziel gibt es einen **Zielcode** und die **Platzierung**. Die ersten drei Clubs gewinnen.
 
-Der Spielstand liegt auf dem Server. Auf einem anderen Gerät genügt der Startcode oder der zuletzt erhaltene Ortscode, um weiterzuspielen.
+Der Spielstand liegt auf dem Server. Auf einem anderen Gerät einfach den Startcode nochmal eingeben.
 
-## Eventleitung: Admin-Bereich
+## Eventleitung & Helfer: Admin-Bereich
 
-Unter **`/admin/`** melden sich Eventleiter mit ihrem Namen und dem gemeinsamen Admin-Passwort an:
+Unter **`/admin/`** gibt es zwei Rollen:
 
-- **Club anlegen:** Clubname eingeben → *Erstellen*. Der Startcode ist **sofort** aktiv, inklusive fertigem DM-Text zum Kopieren.
-- **Live-Übersicht:** wird alle 4 Sekunden aktualisiert. Zeigt für jeden Club die aktuelle Station, den Fortschritt, wann er zuletzt aktiv war, die Zielzeit und den Platz, dazu einen Verlauf „Was gerade passiert“.
-- **Hilfe vor Ort:** alle Codes eines Clubs anzeigen, Fortschritt zurücksetzen oder Club löschen.
-- **Testmodus** per Schalter ein- und ausschalten. Jede Änderung erscheint mit Namen im Verlauf.
+| | Eventleitung | Helfer |
+|---|---|---|
+| Anmeldung | Name + gemeinsames Admin-Passwort | persönlicher Helfer-Code (`HELFER-…`) |
+| Ankünfte bestätigen, Live-Übersicht | ✅ | ✅ |
+| Clubs anlegen, löschen, zurücksetzen, Codes einsehen | ✅ | – |
+| Helfer anlegen und entfernen, Testmodus | ✅ | – |
+
+- **Ankünfte bestätigen:** Oben „Ich stehe an: …“ den eigenen Ort wählen. Kommt ein Club im Spiel an, bei ihm auf **„Angekommen ✓“** drücken.
+- **Helfer hinzufügen:** Name eintragen → *Helfer hinzufügen*. Die fertige Einladung mit Code und Anleitung wird kopiert und kann per DM verschickt werden. Entfernte Helfer verlieren sofort den Zugang.
+- **Club anlegen:** Clubname eingeben → *Erstellen*. Der Startcode ist **sofort** aktiv, mit fertigem DM-Text.
+- **Live-Übersicht:** wird alle 4 Sekunden aktualisiert. Zeigt Station, Fortschritt, letzte Aktivität, Zielzeit und Platz, dazu einen Verlauf mit allen Bestätigungen samt Namen.
+- **Testmodus** per Schalter ein- und ausschalten.
 
 ## 🔒 Schutz vor Schummeln
 
 - **Alle Lösungen liegen nur auf dem Server.** Der Browser bekommt nur, was das Team schon erreicht hat. Im Quelltext stehen keine Orte, Codes oder Lösungen.
 - **Der Server prüft jeden Schritt:** Tresorcodes, Memory-Züge, Treffer im Suchbild, Wörter im Buchstabensalat. Beim Schiebepuzzle werden die Züge nachgespielt. Stationen lassen sich nicht überspringen.
+- **Keine Ortscodes zum Weitergeben:** Weiter geht es nur, wenn ein Eventleiter oder Helfer vor Ort im Spiel die Ankunft bestätigt.
 - **Zeiten und Platzierung misst der Server.** Sie lassen sich im Browser nicht fälschen.
 - **Gegen Durchprobieren:** Anmeldungen, Tresorversuche und Klicks sind pro Minute begrenzt.
 - Tresorcodes sind **je Club verschieden**. Abschreiben bei anderen Clubs bringt nichts.

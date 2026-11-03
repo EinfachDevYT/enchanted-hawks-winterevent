@@ -124,11 +124,11 @@ function renderIntro() {
   el.innerHTML = `<div class="intro">
     <div class="eyebrow" data-rise>${esc(D.clubName)} · ${esc(D.subtitle)}</div>
     <h1 class="display" id="introTitle"><span class="line">${chars('Schnitzeljagd')}</span><span class="line"><em>${chars('durch Jorvik')}</em></span></h1>
-    <p class="lead" data-rise>Rätsel, Minispiele und verschlossene Tresore quer durch Jorvik. Jeder Tresor verrät euch erst das nächste Ziel. Gebt euren Teamcode ein, den ihr von der Eventleitung per DM bekommen habt.</p>
-    <div data-rise style="width:min(560px,100%)">${codeBox({ id: 'loginForm', placeholder: 'Teamcode', button: 'Losreiten' })}<div class="msg" id="loginMsg"></div></div>
+    <p class="lead" data-rise>Rätsel, Minispiele und verschlossene Tresore quer durch Jorvik. Jeder Tresor verrät euch erst das nächste Ziel. Gebt euren Startcode ein, den ihr von der Eventleitung per DM bekommen habt. Auf einem anderen Gerät einfach denselben Code nochmal eingeben.</p>
+    <div data-rise style="width:min(560px,100%)">${codeBox({ id: 'loginForm', placeholder: 'Startcode', button: 'Losreiten' })}<div class="msg" id="loginMsg"></div></div>
     <div class="intro-steps" data-rise>
-      <div><b>01</b>Teamcode eingeben</div><div><b>02</b>Rätsel und Minispiele lösen</div>
-      <div><b>03</b>Tresor knacken und den nächsten Ortscode finden</div><div><b>04</b>Als Erste das Ziel erreichen</div>
+      <div><b>01</b>Startcode eingeben</div><div><b>02</b>Rätsel und Minispiele lösen</div>
+      <div><b>03</b>Tresor knacken und zum nächsten Ort reiten</div><div><b>04</b>Als Erste das Ziel erreichen</div>
     </div></div>`;
   show('intro', { introBg: true });
   const title = $('#introTitle');
@@ -207,9 +207,9 @@ function renderMapCard(animate) {
   const texts = {
     done: k === LAST ? 'Ihr habt das Ziel erreicht!' : 'Diesen Ort habt ihr bereits gemeistert.',
     current: st.intro,
-    ready: `${st.arrive || `Reitet im Spiel nach ${st.name}.`} Dort schaltet ihr den Ort mit eurem Ortscode aus dem Tresor frei.`,
+    ready: `${st.arrive || `Reitet im Spiel nach ${st.name}.`} Dort bestätigt ein Eventleiter eure Ankunft, danach geht es automatisch weiter.`,
   };
-  const btn = { done: 'Ansehen', current: 'Station betreten', ready: 'Ort freischalten' }[stt];
+  const btn = { done: 'Ansehen', current: 'Station betreten', ready: 'Unterwegs …' }[stt];
   $('#sMap').innerHTML = `<div class="map-card" id="mapCard">
     <div class="eyebrow">${heads[stt]} · ${k + 1} / ${COUNT}</div>
     <h2 class="display">${esc(st.name)}</h2>
@@ -233,6 +233,7 @@ async function goMap({ intro = false, drawRoute } = {}) {
     gsap.from('#mapNodes .node', { scale: 0, autoAlpha: 0, duration: 0.6, ease: 'back.out(2)', stagger: 0.08, delay: intro ? 0.8 : 0.3 });
     gsap.from('#mapCard', { y: 40, autoAlpha: 0, duration: 0.9, ease: 'power3.out', delay: intro ? 1 : 0.3 });
   }
+  watchArrival();
   await p;
 }
 addEventListener('resize', () => { if (currentScreen === 'map') { layoutMap(); renderNodes(); } });
@@ -259,6 +260,7 @@ async function enterStation(k) {
 const backToMap = () => goMap();
 
 function renderArrive(k) {
+  watchArrival();
   const st = si(k) || { name: 'Nächster Ort' }, wm = st.winterMap;
   const el = screens.station;
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← Karte</button>
@@ -266,24 +268,30 @@ function renderArrive(k) {
       <div class="eyebrow" data-rise>Nächstes Ziel · Station ${k + 1}</div>
       <h2 class="display" data-rise>${esc(st.name)}</h2>
       ${wm ? `<div class="arrive-map" data-rise><img src="${wm.image}" alt="Karte von ${esc(st.name)}"><span class="pin" style="left:${(wm.tree[0] / wm.size[0]) * 100}%;top:${(wm.tree[1] / wm.size[1]) * 100}%"></span></div>` : ''}
-      <p class="lead" data-rise>${esc(st.arrive || `Reitet im Spiel nach ${st.name}.`)} Angekommen? Dann gebt euren Ortscode aus dem Tresor ein.</p>
-      <div data-rise style="width:min(560px,100%)">${codeBox({ id: 'unlockForm', placeholder: 'Ortscode', button: 'Freischalten' })}<div class="msg" id="unlockMsg"></div></div>
+      <p class="lead" data-rise>${esc(st.arrive || `Reitet im Spiel nach ${st.name}.`)} Dort wartet ein <b>Eventleiter</b> auf euch. Sprecht ihn an, er bestätigt eure Ankunft.</p>
+      <div class="waiting" data-rise><span class="waiting-dot"></span>Wartet auf die Bestätigung durch die Eventleitung …</div>
+      <p class="game-meta" data-rise>Diese Seite geht automatisch weiter, ihr müsst nichts eingeben.</p>
     </div>`;
   show('station', { mapVisible: true }); rise(el);
   el.querySelector('#backBtn').onclick = backToMap;
-  $('#unlockForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.currentTarget, btn = f.querySelector('button'), msg = $('#unlockMsg'), code = f.code.value;
-    btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Ortscode wird geprüft …';
-    let res;
-    try { res = await api('login', { code, unlockOnly: true }); }
-    catch (err) { btn.disabled = false; msg.className = 'msg err'; msg.textContent = err.status === 404 ? 'Das ist nicht der richtige Ortscode.' : err.message; shake(f); return; }
-    btn.disabled = false;
-    if (res.team !== SS?.team) { adopt(res); return goMap(); }
-    adopt(res);
-    flash(0.9);
-    if (res.unlocked === LAST) renderFinal(SS); else renderStation(res.unlocked);
-  });
+}
+
+// Warten auf die Ankunfts-Bestätigung: alle 4 s beim Server nachfragen
+let arrivalTimer = null;
+function watchArrival() {
+  clearTimeout(arrivalTimer);
+  const k = SS ? focusStage() : -1;
+  if (k < 1 || status(k) !== 'ready') return;
+  arrivalTimer = setTimeout(async () => {
+    try { await refresh(); } catch (_) { return watchArrival(); }
+    if (prog(k).unlocked) {
+      toast(`✓ Ankunft in ${si(k)?.name || 'neuem Ort'} bestätigt!`); flash(0.8);
+      state.view = k; save();
+      if (currentScreen === 'vault') return watchArrival(); // Tresor-Ansicht nicht unterbrechen
+      if (k === LAST) renderFinal(SS); else if (currentScreen === 'station') renderStation(k); else goMap({ drawRoute: k - 1 });
+    }
+    watchArrival();
+  }, document.hidden ? 10000 : 4000);
 }
 
 function renderRiddles(el, g, k) {
@@ -358,7 +366,7 @@ function renderStation(k) {
 // ============ Tresor ============
 async function enterVault(k) {
   const st = si(k), el = screens.vault;
-  const opened = prog(k).opened ? prog(k).nextCode : null;
+  const opened = !!prog(k).opened;
   stage?.setMode('vault', { open: !!opened });
   el.innerHTML = `<button class="btn ghost sm back" id="backBtn">← ${esc(st.name)}</button>
     ${stage ? '' : '<div class="fallback-vault"></div>'}
@@ -371,7 +379,7 @@ async function enterVault(k) {
     <div class="reveal" id="reveal"></div>`;
   el.querySelector('#backBtn').onclick = () => { stage?.setMode('ambient'); renderStation(k); };
   const shown = show('vault');
-  if (opened) { await shown; return showReveal(k, opened, false); }
+  if (opened) { await shown; return showReveal(k, false); }
   const f = $('#vaultForm'), input = f.code;
   const g0 = gameOf(0), dg = g0?.digits || {};
   if (k === 0 && g0?.mode === 'web' && (g0.riddles || []).every((_, i) => dg[i] != null)) input.value = g0.riddles.map((_, i) => dg[i]).join('');
@@ -394,7 +402,7 @@ async function enterVault(k) {
     }
     btn.disabled = false;
     SS = res.state; // erst jetzt wird das nächste Ziel bekannt
-    save(); updateHud();
+    save(); updateHud(); watchArrival();
     input.blur();
     msg.className = 'msg ok'; msg.textContent = 'Richtig!';
     await gsap.to('#vaultUi', { autoAlpha: 0, y: 30, duration: 0.5, ease: 'power2.in' });
@@ -404,19 +412,18 @@ async function enterVault(k) {
       tl.call(() => flash(0.85), null, 3.4);
       await tl;
     } else flash(0.9);
-    showReveal(k, res.nextCode, true);
+    showReveal(k, true);
   });
 }
-function showReveal(k, code, animate) {
+function showReveal(k, animate) {
   const next = si(k + 1) || { name: 'den nächsten Ort' }, st = si(k) || {};
-  const chars = [...code].map((c) => `<span class="${c === '-' ? 'sep' : ''}">${esc(c)}</span>`).join('');
+  const chars = [...next.name.toUpperCase()].map((c) => `<span class="${/[A-ZÄÖÜ]/.test(c) ? '' : 'sep'}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
   const r = $('#reveal');
   r.innerHTML = `<div class="reveal-card" id="revealCard">
-    <div class="eyebrow">Der Tresor ist offen</div>
-    <h2 class="display">Ortscode für <em>${esc(next.name)}</em></h2>
+    <div class="eyebrow">Der Tresor ist offen · Euer nächstes Ziel</div>
     <div class="big-code" id="bigCode">${chars}</div>
-    <p class="lead">${esc(st.nextHint)}<br>Merkt euch den Code gut. Damit schaltet ihr den nächsten Ort frei und könnt auch auf einem anderen Gerät weiterspielen.</p>
-    <div class="cta-row" style="justify-content:center"><button class="btn" id="nextBtn">Weiter nach ${esc(next.name)} <span class="arrow">→</span></button></div>
+    <p class="lead">${esc(st.nextHint)}<br>Sprecht dort im Spiel den <b>Eventleiter</b> an. Sobald er eure Ankunft bestätigt, geht es hier automatisch weiter.</p>
+    <div class="cta-row" style="justify-content:center"><button class="btn" id="nextBtn">Zur Karte <span class="arrow">→</span></button></div>
   </div>`;
   r.classList.add('on');
   $('#nextBtn').onclick = () => { state.view = k + 1; save(); stage?.setMode('ambient'); goMap({ drawRoute: k }); };
