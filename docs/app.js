@@ -417,11 +417,16 @@ async function enterVault(k) {
 }
 function showReveal(k, animate) {
   const next = si(k + 1) || { name: 'den nächsten Ort' }, st = si(k) || {};
-  const chars = [...next.name.toUpperCase()].map((c) => `<span class="${/[A-ZÄÖÜ]/.test(c) ? '' : 'sep'}">${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('');
+  // Buchstaben pro Wort zusammenhalten; die Kachelgröße passt sich der Länge des Namens an (--n)
+  const words = next.name.toUpperCase().split(/\s+/);
+  const tiles = words.reduce((a, w) => a + w.length, 0) + words.length - 1;
+  // Bei Bindestrich darf umbrochen werden: „SILVERGLADE-“ / „SCHLOSS“ (nie mitten im Wort)
+  const parts = words.flatMap((w) => w.split(/(?<=-)/).map((p, i) => ({ p, cont: i > 0 })));
+  const chars = parts.map(({ p, cont }) => `<span class="word${cont ? ' cont' : ''}">${[...p].map((c) => `<span class="ch${/[A-ZÄÖÜ0-9]/.test(c) ? '' : ' sep'}">${esc(c)}</span>`).join('')}</span>`).join('');
   const r = $('#reveal');
   r.innerHTML = `<div class="reveal-card" id="revealCard">
     <div class="eyebrow">Der Tresor ist offen · Euer nächstes Ziel</div>
-    <div class="big-code" id="bigCode">${chars}</div>
+    <div class="big-code name" id="bigCode" style="--n:${tiles}">${chars}</div>
     <p class="lead">${esc(st.nextHint)}<br>Sprecht dort im Spiel den <b>Eventleiter</b> an. Sobald er eure Ankunft bestätigt, geht es hier automatisch weiter.</p>
     <div class="cta-row" style="justify-content:center"><button class="btn" id="nextBtn">Zur Karte <span class="arrow">→</span></button></div>
   </div>`;
@@ -430,7 +435,7 @@ function showReveal(k, animate) {
   if (!animate || reduce) return;
   gsap.from('#revealCard', { y: 60, scale: 0.94, autoAlpha: 0, duration: 1, ease: 'power3.out' });
   const glyphs = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  [...$('#bigCode').children].forEach((span, i) => {
+  [...$('#bigCode').querySelectorAll('.ch')].forEach((span, i) => {
     if (span.classList.contains('sep')) return;
     const final = span.textContent; let n = 0;
     const iv = setInterval(() => {
