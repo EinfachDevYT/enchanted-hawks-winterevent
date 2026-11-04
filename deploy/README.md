@@ -155,7 +155,7 @@ Das Skript übernimmt exakt den Stand von GitHub, prüft nginx und lädt neu. Da
 
 Clubs legt die Eventleitung **live im Admin-Bereich** an: `https://winterevent.enchantedhawks.eu/admin/` → Clubname → *Erstellen*. Der Startcode funktioniert sofort, ohne Upload oder Update.
 
-Helfer fügt die Eventleitung dort ebenfalls hinzu (Name → *Helfer hinzufügen*). Jeder Helfer meldet sich mit seinem eigenen Helfer-Code an und bestätigt die Ankünfte an seinem Ort.
+Weitere Eventleiter mit eigenem Passwort (Name → *Eventleiter anlegen*, Start-Passwort per DM schicken) und Helfer fügt die Eventleitung dort ebenfalls hinzu (Name → *Helfer hinzufügen*). Jeder Helfer meldet sich mit seinem eigenen Helfer-Code an und bestätigt die Ankünfte an seinem Ort.
 
 ### Spielstände sichern
 
@@ -188,7 +188,8 @@ sudo cp /var/lib/winterevent/event.sqlite ~/winterevent-backup-$(date +%F).sqlit
 |---|---|
 | `certbot` meldet `unauthorized` … `acme-challenge` … `404` | Alte Version der Konfiguration. Die Regel für versteckte Dateien hat `/.well-known/` blockiert. Mit `update.sh` den neuen Stand holen, die Konfiguration erneut nach `/etc/nginx/sites-available/` kopieren, nginx neu laden und certbot nochmal starten. |
 | Seite meldet „Der Spielserver ist gerade nicht erreichbar“ | `deploy/setup-backend.sh` noch nicht ausgeführt, oder PHP-FPM läuft nicht: `sudo systemctl status php*-fpm`. Log: `sudo tail -n 30 /var/log/nginx/winterevent.error.log` |
-| Admin-Passwort vergessen | `sudo rm /etc/winterevent/config.php` und `setup-backend.sh` erneut ausführen. Clubs und Spielstände bleiben erhalten, nur die Anmeldungen laufen ab. |
+| Eigenes Eventleiter-Passwort vergessen | Ein anderer Eventleiter klickt im Admin-Bereich bei dir auf *Passwort zurücksetzen* und schickt dir das neue Start-Passwort. |
+| Admin-Passwort (Hauptzugang) vergessen | `sudo rm /etc/winterevent/config.php` und `setup-backend.sh` erneut ausführen. Clubs und Spielstände bleiben erhalten, nur die Anmeldungen laufen ab. |
 | `update.sh` meldet „Your local changes … would be overwritten“ | Alte Version von `update.sh`. Einmal `cd /var/www/enchanted-hawks-winterevent && sudo git fetch origin && sudo git reset --hard origin/main` ausführen. Die neue Version übernimmt den GitHub-Stand immer exakt. |
 | `certbot` meldet „DNS problem“ | Der DNS-Eintrag aus Schritt 1 greift noch nicht. Mit `dig` prüfen und warten. Bei Cloudflare die Wolke auf grau stellen. |
 | Seite zeigt „Bitte öffnet die Seite über https“ | HTTPS ist noch nicht eingerichtet (Schritt 5). |

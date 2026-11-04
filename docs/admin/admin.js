@@ -27,10 +27,12 @@
   const helperText = (h) => `❄️ Danke, dass du beim Winterevent hilfst, ${h.name}!\n\nSo bestätigst du die Ankunft der Clubs:\n1. Öffne ${site()}/admin/\n2. Melde dich mit deinem Helfer-Code an: ${h.code}\n3. Wähle oben „Ich stehe an: …“ deinen Ort.\n4. Kommt ein Club im Spiel bei dir an, drück bei ihm auf „Angekommen ✓“.\n\nDen Code bitte nicht weitergeben.`;
 
   // ---------- Anmeldung ----------
-  function saveAuth(r) { auth = { admin: r.admin, name: r.name, role: r.role, testTools: r.testTools }; localStorage.setItem(STORE, JSON.stringify(auth)); }
+  function saveAuth(r) { auth = { admin: r.admin, name: r.name, role: r.role, own: !!r.own, testTools: r.testTools }; localStorage.setItem(STORE, JSON.stringify(auth)); }
+  let pending = null; // Anmeldung mit Start-Passwort: erst eigenes Passwort festlegen
   function showView() {
     const on = !!auth;
-    $('#loginView').hidden = on; $('#dash').hidden = !on; $('#who').hidden = !on;
+    $('#loginView').hidden = on || !!pending; $('#pwView').hidden = !pending; $('#dash').hidden = !on; $('#who').hidden = !on;
+    $('#pwBtn').hidden = !(on && auth.own);
     document.body.classList.toggle('helper', on && !isAdmin());
     if (on) { $('#whoName').textContent = `${auth.name} · ${isAdmin() ? 'Eventleitung' : 'Helfer'}`; renderTest(); poll(); }
     else clearTimeout(timer);
@@ -38,13 +40,36 @@
   async function login(form, msgSel, action, body) {
     const msg = $(msgSel), btn = form.querySelector('button');
     btn.disabled = true; msg.className = 'msg'; msg.textContent = 'Anmelden …';
-    try { saveAuth(await api(action, body)); msg.textContent = ''; showView(); }
+    try {
+      const r = await api(action, body); msg.textContent = '';
+      if (r.mustChange) { pending = r; $('#pwName').textContent = r.name; $('#pwUser').value = r.name; showView(); $('#pwNew').focus(); }
+      else { saveAuth(r); showView(); }
+    }
     catch (err) { msg.className = 'msg err'; msg.textContent = err.message; }
     btn.disabled = false;
   }
   $('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); login(e.target, '#loginMsg', 'admin_login', { name: $('#name').value, password: $('#password').value }).then(() => { $('#password').value = ''; }); });
   $('#helperForm').addEventListener('submit', (e) => { e.preventDefault(); login(e.target, '#helperMsg', 'helper_login', { code: $('#helperCode').value }); });
   $('#logoutBtn').addEventListener('click', () => { auth = null; localStorage.removeItem(STORE); showView(); });
+  $('#pwForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = $('#pwMsg'), btn = e.target.querySelector('button'), a = $('#pwNew').value, b = $('#pwNew2').value;
+    if (a !== b) { msg.className = 'msg err'; msg.textContent = 'Die beiden Passwörter stimmen nicht überein.'; return; }
+    btn.disabled = true;
+    try { const r = await api('set_password', { admin: pending.admin, password: a }); pending = null; saveAuth(r); e.target.reset(); toast('Passwort gespeichert'); showView(); }
+    catch (err) { msg.className = 'msg err'; msg.textContent = err.message; if (err.status === 401) { pending = null; showView(); } }
+    btn.disabled = false;
+  });
+  // Passwort ändern (eigenes Eventleiter-Konto)
+  $('#pwBtn').addEventListener('click', () => { $('#pwChange').reset(); $('#pwChangeUser').value = auth.name; $('#pwChangeMsg').textContent = ''; $('#pwDlg').showModal(); });
+  $('#pwCancel').addEventListener('click', () => $('#pwDlg').close());
+  $('#pwChange').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = $('#pwChangeMsg'), a = $('#pwChangeNew').value;
+    if (a !== $('#pwChangeNew2').value) { msg.className = 'msg err'; msg.textContent = 'Die beiden neuen Passwörter stimmen nicht überein.'; return; }
+    try { const r = await api('set_password', { old: $('#pwOld').value, password: a }); saveAuth(r); $('#pwDlg').close(); toast('Passwort geändert'); }
+    catch (err) { if (err.status === 401 && /neu anmelden/.test(err.message)) return logoutExpired(); msg.className = 'msg err'; msg.textContent = err.message; }
+  });
   function logoutExpired(msg = 'Anmeldung abgelaufen. Bitte neu anmelden.') { auth = null; localStorage.removeItem(STORE); showView(); $('#helperMsg').className = 'msg err'; $('#helperMsg').textContent = msg; }
   const handle = (err) => { if (err.status === 401) return logoutExpired(); toast(err.message); };
 
@@ -65,6 +90,37 @@
       await load();
     } catch (err) { if (err.status === 401) return logoutExpired(); msg.className = 'msg err'; msg.textContent = err.message; }
     btn.disabled = false;
+  });
+
+  // ---------- Eventleiter (Eventleitung) ----------
+  const leaderText = (name, pw) => `❄️ Du bist Eventleiter beim Winterevent der Enchanted Hawks, ${name}!\n\nSo meldest du dich an:\n1. Öffne ${site()}/admin/\n2. Klicke auf „Anmeldung für die Eventleitung“.\n3. Name: ${name}\n   Start-Passwort: ${pw}\n4. Danach legst du dein eigenes Passwort fest.\n\nDas Start-Passwort bitte nicht weitergeben.`;
+  function showLeaderPw(r, what) {
+    const box = $('#leaderResult'); box.hidden = false;
+    box.innerHTML = `<span>✔ ${what} <b>${esc(r.name)}</b>. Start-Passwort (wird nur jetzt angezeigt):</span><span class="pw">${esc(r.password)}</span>
+      <button class="primary sm" data-copy>Einladung kopieren</button>`;
+    box.querySelector('[data-copy]').onclick = () => copy(leaderText(r.name, r.password));
+    copy(leaderText(r.name, r.password));
+  }
+  $('#leaderCreate').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = $('#leaderMsg'), btn = e.target.querySelector('button'), name = $('#leaderName').value.trim();
+    if (!name) { msg.className = 'msg err'; msg.textContent = 'Bitte einen Namen eingeben.'; return; }
+    btn.disabled = true; msg.textContent = '';
+    try { const r = await api('admin_leader_create', { name }); showLeaderPw(r, 'Eventleiter angelegt:'); $('#leaderName').value = ''; await load(); }
+    catch (err) { if (err.status === 401) return logoutExpired(); msg.className = 'msg err'; msg.textContent = err.message; }
+    btn.disabled = false;
+  });
+  $('#leaders').addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-l]'); if (!b) return;
+    const l = data.leaders.find((x) => x.id === +b.dataset.id); if (!l) return;
+    try {
+      if (b.dataset.l === 'reset') {
+        if (!confirm(`Neues Start-Passwort für ${l.name} erzeugen? Das bisherige Passwort funktioniert dann nicht mehr.`)) return;
+        showLeaderPw(await api('admin_leader_reset', { id: l.id }), 'Neues Start-Passwort für');
+      }
+      if (b.dataset.l === 'del') { if (!confirm(`${l.name} als Eventleiter entfernen? Der Zugang ist danach sofort gesperrt.`)) return; await api('admin_leader_delete', { id: l.id }); toast('Eventleiter entfernt'); }
+      load();
+    } catch (err) { handle(err); }
   });
 
   // ---------- Helfer (Eventleitung) ----------
@@ -112,6 +168,7 @@
     const t = `<time>${time(e.at)}</time>`;
     if (e.type.startsWith('test_')) return `<li>${t}<span>${evText[e.type]} von <b>${esc(e.info)}</b></span></li>`;
     if (e.type === 'helper_add' || e.type === 'helper_del') { const [by, who] = String(e.info).split('|'); return `<li>${t}<span>👤 <b>${esc(who)}</b> ${e.type === 'helper_add' ? 'ist jetzt Helfer' : 'ist kein Helfer mehr'} (von ${esc(by)})</span></li>`; }
+    if (e.type.startsWith('leader_')) { const [by, who] = String(e.info).split('|'); const what = { leader_add: 'ist jetzt Eventleiter', leader_del: 'ist kein Eventleiter mehr', leader_reset: 'hat ein neues Start-Passwort' }[e.type]; return `<li>${t}<span>🔑 <b>${esc(who)}</b> ${what} (von ${esc(by)})</span></li>`; }
     const where = ['start', 'arrive', 'unlock', 'solved', 'opened'].includes(e.type) ? esc(e.station) : '';
     const by = e.type === 'arrive' && e.info ? ` <span class="muted">· bestätigt von ${esc(e.info)}</span>` : '';
     return `<li>${t}<span><b>${esc(e.team || 'gelöschter Club')}</b> ${evText[e.type] || e.type} ${where}${by}</span></li>`;
@@ -149,6 +206,11 @@
           <button class="ghost sm" data-act="reset" data-id="${t.id}">Zurücksetzen</button>
           <button class="ghost sm danger" data-act="del" data-id="${t.id}">Löschen</button></span></td>` : ''}</tr>`;
     }).join('') : `<tr><td colspan="7" class="empty">Noch keine Clubs.${admin ? ' Leg oben den ersten an.' : ''}</td></tr>`;
+    // Eventleiter-Liste
+    if (admin && data.leaders) $('#leaders').innerHTML = data.leaders.length ? data.leaders.map((l) =>
+      `<tr><td><b>${esc(l.name)}</b></td><td>${l.pending ? '<span class="pill pending">muss Passwort festlegen</span>' : '<span class="pill ok">aktiv</span>'}</td><td class="muted">${esc(l.createdBy || '')}</td>
+        <td class="right"><span class="actions"><button class="ghost sm" data-l="reset" data-id="${l.id}">Passwort zurücksetzen</button>${l.id === data.me ? '' : `<button class="ghost sm danger" data-l="del" data-id="${l.id}">Entfernen</button>`}</span></td></tr>`).join('')
+      : `<tr><td colspan="4" class="empty">Noch keine eigenen Eventleiter-Zugänge. Bisher gibt es nur den Hauptzugang.</td></tr>`;
     // Helfer-Liste
     if (admin && data.helpers) $('#helpers').innerHTML = data.helpers.length ? data.helpers.map((h) =>
       `<tr><td><b>${esc(h.name)}</b></td><td class="code">${esc(h.code)}</td><td class="muted">${esc(h.createdBy || '')}</td>

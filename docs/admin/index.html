@@ -21,6 +21,7 @@
     <div class="who" id="who" hidden>
       <span class="live" id="liveDot"><i></i>Live</span>
       <span id="whoName"></span>
+      <button class="ghost sm" id="pwBtn" hidden>Passwort ändern</button>
       <button class="ghost sm" id="logoutBtn">Abmelden</button>
     </div>
   </header>
@@ -44,6 +45,19 @@
           <div class="msg" id="loginMsg" role="status"></div>
         </form>
       </details>
+    </section>
+
+    <!-- Erste Anmeldung: eigenes Passwort festlegen -->
+    <section class="card login" id="pwView" hidden>
+      <h1>Eigenes Passwort</h1>
+      <p class="muted">Willkommen, <b id="pwName"></b>! Du hast dich mit einem Start-Passwort angemeldet. Bitte leg jetzt dein eigenes Passwort fest (mindestens 8 Zeichen).</p>
+      <form id="pwForm" class="stack" autocomplete="on">
+        <input type="text" name="username" id="pwUser" autocomplete="username" hidden>
+        <label>Neues Passwort<input id="pwNew" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label>Passwort wiederholen<input id="pwNew2" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="primary">Passwort festlegen</button>
+        <div class="msg" id="pwMsg" role="status"></div>
+      </form>
     </section>
 
     <!-- Dashboard -->
@@ -87,6 +101,18 @@
       </section>
 
       <section class="card admin-only">
+        <h2>Eventleiter</h2>
+        <p class="muted">Eventleiter dürfen alles: Clubs anlegen, Helfer und andere Eventleiter verwalten. Jeder bekommt ein Start-Passwort und legt bei der ersten Anmeldung ein eigenes fest.</p>
+        <form class="row" id="leaderCreate" autocomplete="off">
+          <input id="leaderName" placeholder="Name des Eventleiters, z. B. Jonas" maxlength="40" aria-label="Name des Eventleiters">
+          <button class="primary">Eventleiter anlegen</button>
+        </form>
+        <div id="leaderResult" class="created" hidden></div>
+        <div class="msg" id="leaderMsg" role="status"></div>
+        <div class="table-wrap"><table><thead><tr><th>Eventleiter</th><th>Status</th><th>Angelegt von</th><th class="right">Aktionen</th></tr></thead><tbody id="leaders"></tbody></table></div>
+      </section>
+
+      <section class="card admin-only">
         <h2>Helfer</h2>
         <p class="muted">Jeder Helfer bekommt einen eigenen Code. Helfer können Ankünfte bestätigen und die Live-Übersicht sehen, aber keine Clubs anlegen, löschen oder Codes einsehen.</p>
         <form class="row" id="helperCreate" autocomplete="off">
@@ -113,6 +139,19 @@
       <div class="table-wrap"><table><thead><tr><th>Station</th><th>Tresorcode</th></tr></thead><tbody id="codesBody"></tbody></table></div>
       <p class="muted small" id="codesZiel"></p>
       <button class="ghost">Schließen</button>
+    </form>
+  </dialog>
+  <dialog id="pwDlg">
+    <form id="pwChange" autocomplete="on">
+      <h2>Passwort ändern</h2>
+      <div class="stack">
+        <input type="text" name="username" id="pwChangeUser" autocomplete="username" hidden>
+        <label>Bisheriges Passwort<input id="pwOld" type="password" autocomplete="current-password" required></label>
+        <label>Neues Passwort<input id="pwChangeNew" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label>Neues Passwort wiederholen<input id="pwChangeNew2" type="password" autocomplete="new-password" minlength="8" required></label>
+        <div class="msg" id="pwChangeMsg" role="status"></div>
+        <div class="row"><button class="primary">Speichern</button><button class="ghost" type="button" id="pwCancel">Abbrechen</button></div>
+      </div>
     </form>
   </dialog>
   <div class="toast" id="toast" role="status"></div>

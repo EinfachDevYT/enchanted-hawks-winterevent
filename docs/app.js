@@ -417,16 +417,24 @@ async function enterVault(k) {
 }
 function showReveal(k, animate) {
   const next = si(k + 1) || { name: 'den nächsten Ort' }, st = si(k) || {};
-  // Buchstaben pro Wort zusammenhalten; die Kachelgröße passt sich der Länge des Namens an (--n)
+  // Buchstaben pro Wort zusammenhalten. Alle Ortsnamen bekommen dieselbe Kachelgröße: Sie richtet sich nach dem
+  // längsten Wortteil (12 Zeichen, „SILVERGLADE-“), lange Namen laufen dann auf zwei Zeilen statt kleiner zu werden.
   const words = next.name.toUpperCase().split(/\s+/);
-  const tiles = words.reduce((a, w) => a + w.length, 0) + words.length - 1;
   // Bei Bindestrich darf umbrochen werden: „SILVERGLADE-“ / „SCHLOSS“ (nie mitten im Wort)
   const parts = words.flatMap((w) => w.split(/(?<=-)/).map((p, i) => ({ p, cont: i > 0 })));
-  const chars = parts.map(({ p, cont }) => `<span class="word${cont ? ' cont' : ''}">${[...p].map((c) => `<span class="ch${/[A-ZÄÖÜ0-9]/.test(c) ? '' : ' sep'}">${esc(c)}</span>`).join('')}</span>`).join('');
+  // Zeilen festlegen: höchstens 13 Kacheln pro Zeile, Umbruch nur zwischen Wörtern oder nach dem Bindestrich
+  const lines = [];
+  for (const part of parts) {
+    const cur = lines[lines.length - 1];
+    const len = cur ? cur.reduce((a, x, i) => a + x.p.length + (i && !x.cont ? 1 : 0), 0) : 0;
+    if (cur && len + (part.cont ? 0 : 1) + part.p.length <= 13) cur.push(part); else lines.push([part]);
+  }
+  const tile = (c) => `<span class="ch${/[A-ZÄÖÜ0-9]/.test(c) ? '' : ' sep'}">${esc(c)}</span>`;
+  const chars = lines.map((ln) => `<div class="line">${ln.map(({ p, cont }, i) => `${i && !cont ? '<span class="sp"></span>' : ''}<span class="word">${[...p].map(tile).join('')}</span>`).join('')}</div>`).join('');
   const r = $('#reveal');
   r.innerHTML = `<div class="reveal-card" id="revealCard">
     <div class="eyebrow">Der Tresor ist offen · Euer nächstes Ziel</div>
-    <div class="big-code name" id="bigCode" style="--n:${tiles}">${chars}</div>
+    <div class="big-code name" id="bigCode">${chars}</div>
     <p class="lead">${esc(st.nextHint)}<br>Sprecht dort im Spiel den <b>Eventleiter</b> an. Sobald er eure Ankunft bestätigt, geht es hier automatisch weiter.</p>
     <div class="cta-row" style="justify-content:center"><button class="btn" id="nextBtn">Zur Karte <span class="arrow">→</span></button></div>
   </div>`;

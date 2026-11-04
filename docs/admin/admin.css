@@ -84,3 +84,5 @@ select { font: inherit; color: var(--frost); background: var(--ink-2); border: 1
 .arrive-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: var(--ink-2); border: 1px solid var(--line); }
 .arrive-item b { font-size: 1.05rem; }
 button.arrive { background: linear-gradient(180deg, #b8ffd9, var(--ok)); color: #04261a; padding: 12px 20px; }
+.created .pw { font: 700 1.25rem var(--mono); color: var(--gold-2); letter-spacing: .04em; }
+.pill.pending { color: var(--warn); border-color: rgba(255,200,97,.4); } .pill.ok { color: var(--ok); border-color: rgba(124,240,187,.4); }

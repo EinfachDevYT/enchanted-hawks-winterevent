@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, team_id INTEGER, at IN
 CREATE TABLE IF NOT EXISTS hits(k TEXT, at INTEGER);
 CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS helpers(id INTEGER PRIMARY KEY, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, created_by TEXT, created_at INTEGER, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS leaders(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, pw_hash TEXT NOT NULL, must_change INTEGER NOT NULL DEFAULT 1, created_by TEXT, created_at INTEGER, active INTEGER NOT NULL DEFAULT 1);
 CREATE INDEX IF NOT EXISTS hits_k ON hits(k, at);');
 
 function q(string $sql, array $p = []): PDOStatement { global $db; $s = $db->prepare($sql); $s->execute($p); return $s; }
@@ -76,19 +77,30 @@ function teamFromToken(?string $tok): ?array {
   if (!hash_equals(sign($data), $s) || !str_starts_with($data, 't.')) return null;
   return q('SELECT * FROM teams WHERE id = ?', [(int) substr($data, 2)])->fetch() ?: null;
 }
-// Rollen: 'a' = Eventleitung (alles), 'h' = Helfer (nur Live-Übersicht und Ankünfte bestätigen)
+// Rollen: 'a' = Eventleitung (alles; id 0 = Hauptzugang mit dem Passwort aus der Konfiguration, sonst Eventleiter-Konto),
+//         'h' = Helfer (nur Live-Übersicht und Ankünfte bestätigen),
+//         'p' = Eventleiter, der nach der Anmeldung erst ein eigenes Passwort festlegen muss
 function staffToken(string $role, string $name, int $hid = 0): string { $d = $role . '.' . (time() + 14 * 3600) . '.' . $hid . '.' . b64u($name); return b64u($d) . '.' . sign($d); }
 function staffFromToken(?string $tok): ?array {
   if (!$tok || !str_contains($tok, '.')) return null;
   [$d, $s] = explode('.', $tok, 2); $data = ub64u($d);
   if (!hash_equals(sign($data), $s)) return null;
   $p = explode('.', $data, 4);
-  if (count($p) !== 4 || !in_array($p[0], ['a', 'h'], true) || (int) $p[1] < time()) return null;
-  if ($p[0] === 'h' && !q('SELECT 1 FROM helpers WHERE id = ? AND active = 1', [(int) $p[2]])->fetchColumn()) return null; // entfernte Helfer sofort aussperren
-  return ['role' => $p[0], 'name' => ub64u($p[3])];
+  if (count($p) !== 4 || !in_array($p[0], ['a', 'h', 'p'], true) || (int) $p[1] < time()) return null;
+  $id = (int) $p[2];
+  // entfernte Helfer/Eventleiter sofort aussperren; zurückgesetzte Passwörter beenden alte Anmeldungen
+  if ($p[0] === 'h' && !q('SELECT 1 FROM helpers WHERE id = ? AND active = 1', [$id])->fetchColumn()) return null;
+  if ($p[0] === 'a' && $id > 0 && !q('SELECT 1 FROM leaders WHERE id = ? AND active = 1 AND must_change = 0', [$id])->fetchColumn()) return null;
+  if ($p[0] === 'p' && !q('SELECT 1 FROM leaders WHERE id = ? AND active = 1 AND must_change = 1', [$id])->fetchColumn()) return null;
+  return ['role' => $p[0], 'name' => ub64u($p[3]), 'id' => $id];
 }
 function needTeam(): array { global $in; $t = teamFromToken($in['token'] ?? null); if (!$t) fail('Bitte neu anmelden.', 401); return $t; }
-function needStaff(): array { global $in; $u = staffFromToken($in['admin'] ?? null); if ($u === null) fail('Anmeldung abgelaufen. Bitte neu anmelden.', 401); return $u; }
+function needStaff(): array { global $in; $u = staffFromToken($in['admin'] ?? null); if ($u === null || $u['role'] === 'p') fail('Anmeldung abgelaufen. Bitte neu anmelden.', 401); return $u; }
+function tempPassword(): string { $A = 'abcdefghjkmnpqrstuvwxyz23456789'; $s = ''; for ($i = 0; $i < 12; $i++) { if ($i && $i % 4 === 0) $s .= '-'; $s .= $A[rnd(strlen($A))]; } return $s; }
+function checkNewPassword(string $pw): void {
+  if (mb_strlen($pw) < 8) fail('Das Passwort muss mindestens 8 Zeichen lang sein.');
+  if (mb_strlen($pw) > 200) fail('Das Passwort ist zu lang.');
+}
 function needAdmin(): string { $u = needStaff(); if ($u['role'] !== 'a') fail('Das darf nur die Eventleitung.', 403); return $u['name']; }
 
 // ---------- Spiel-Logik ----------
@@ -296,12 +308,32 @@ switch ($a) {
 
 // ============ Admin ============
 switch ($a) {
-  case 'admin_login':
+  case 'admin_login': {
     limit('admin:' . $ip, 6, 60);
-    $name = trim(mb_substr((string) ($in['name'] ?? ''), 0, 40));
+    $name = trim(mb_substr((string) ($in['name'] ?? ''), 0, 40)); $pw = (string) ($in['password'] ?? '');
     if ($name === '') fail('Bitte gib deinen Namen ein.');
-    if (!password_verify((string) ($in['password'] ?? ''), (string) $CFG['admin_password_hash'])) fail('Falsches Passwort.', 401);
-    out(['ok' => true, 'admin' => staffToken('a', $name), 'name' => $name, 'role' => 'a', 'testTools' => testMode()]);
+    $l = q('SELECT * FROM leaders WHERE name = ? AND active = 1', [$name])->fetch();
+    if ($l) { // persönliches Eventleiter-Konto
+      if (!password_verify($pw, $l['pw_hash'])) fail('Name oder Passwort stimmt nicht.', 401);
+      if ($l['must_change']) out(['ok' => true, 'mustChange' => true, 'admin' => staffToken('p', $l['name'], (int) $l['id']), 'name' => $l['name']]);
+      out(['ok' => true, 'admin' => staffToken('a', $l['name'], (int) $l['id']), 'name' => $l['name'], 'role' => 'a', 'own' => true, 'testTools' => testMode()]);
+    }
+    // Hauptzugang mit dem Passwort aus der Einrichtung
+    if (!password_verify($pw, (string) $CFG['admin_password_hash'])) fail('Name oder Passwort stimmt nicht.', 401);
+    out(['ok' => true, 'admin' => staffToken('a', $name), 'name' => $name, 'role' => 'a', 'own' => false, 'testTools' => testMode()]);
+  }
+
+  case 'set_password': { // eigenes Passwort festlegen (erste Anmeldung) oder ändern
+    limit('pw:' . $ip, 10, 60);
+    $u = staffFromToken($in['admin'] ?? null);
+    if (!$u || !in_array($u['role'], ['a', 'p'], true) || $u['id'] < 1) fail('Bitte neu anmelden.', 401);
+    $l = q('SELECT * FROM leaders WHERE id = ?', [$u['id']])->fetch();
+    if ($u['role'] === 'a' && !password_verify((string) ($in['old'] ?? ''), $l['pw_hash'])) fail('Das bisherige Passwort stimmt nicht.', 401);
+    $new = (string) ($in['password'] ?? ''); checkNewPassword($new);
+    if (password_verify($new, $l['pw_hash'])) fail('Bitte ein anderes Passwort als bisher wählen.');
+    q('UPDATE leaders SET pw_hash = ?, must_change = 0 WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $l['id']]);
+    out(['ok' => true, 'admin' => staffToken('a', $l['name'], (int) $l['id']), 'name' => $l['name'], 'role' => 'a', 'own' => true, 'testTools' => testMode()]);
+  }
 
   case 'helper_login': // Helfer melden sich mit ihrem persönlichen Helfer-Code an
     limit('admin:' . $ip, 10, 60);
@@ -329,6 +361,8 @@ switch ($a) {
     out(['ok' => true, 'now' => now(), 'count' => $COUNT, 'stations' => array_map(fn($s) => $s['name'], $ST), 'teams' => $list,
       'events' => array_map(fn($e) => ['at' => (int) $e['at'], 'team' => $e['name'], 'type' => $e['type'], 'stage' => (int) $e['stage'], 'station' => $ST[(int) $e['stage']]['name'] ?? '', 'info' => $e['info']], $ev),
       'siteUrl' => $CFG['site_url'] ?? '', 'testTools' => testMode(), 'role' => $me['role'],
+      'leaders' => $isAdmin ? array_map(fn($l) => ['id' => (int) $l['id'], 'name' => $l['name'], 'pending' => (bool) $l['must_change'], 'createdBy' => $l['created_by']], q('SELECT * FROM leaders WHERE active = 1 ORDER BY name COLLATE NOCASE')->fetchAll()) : null,
+      'me' => $me['id'] ?? 0,
       'helpers' => $isAdmin ? array_map(fn($h) => ['id' => (int) $h['id'], 'name' => $h['name'], 'code' => $h['code'], 'createdBy' => $h['created_by']], q('SELECT * FROM helpers WHERE active = 1 ORDER BY name COLLATE NOCASE')->fetchAll()) : null]);
   }
 
@@ -370,6 +404,38 @@ switch ($a) {
     if (!$prev) fail("{$team['name']} hat den Tresor davor noch nicht geöffnet.", 409);
     if (q('SELECT unlocked_at FROM progress WHERE team_id = ? AND stage = ?', [$tid, $k])->fetchColumn()) fail("{$team['name']} ist dort schon angekommen.", 409);
     unlock($team, $k, $by);
+    out(['ok' => true]);
+  }
+
+  case 'admin_leader_create': { // neuer Eventleiter mit zufälligem Start-Passwort
+    $by = needAdmin();
+    $name = trim(preg_replace('/\s+/', ' ', mb_substr((string) ($in['name'] ?? ''), 0, 40)));
+    if ($name === '') fail('Bitte einen Namen eingeben.');
+    $old = q('SELECT * FROM leaders WHERE name = ?', [$name])->fetch();
+    if ($old && $old['active']) fail("„{$name}“ ist schon Eventleiter.", 409);
+    $tmp = tempPassword();
+    if ($old) q('UPDATE leaders SET pw_hash = ?, must_change = 1, active = 1, created_by = ?, created_at = ? WHERE id = ?', [password_hash($tmp, PASSWORD_DEFAULT), $by, now(), $old['id']]);
+    else q('INSERT INTO leaders(name, pw_hash, must_change, created_by, created_at) VALUES(?,?,1,?,?)', [$name, password_hash($tmp, PASSWORD_DEFAULT), $by, now()]);
+    event(null, 'leader_add', 0, $by . '|' . $name);
+    out(['ok' => true, 'name' => $name, 'password' => $tmp]);
+  }
+
+  case 'admin_leader_reset': { // Passwort vergessen: neues Start-Passwort, alte Anmeldungen enden
+    $by = needAdmin(); $id = (int) ($in['id'] ?? 0);
+    $l = q('SELECT * FROM leaders WHERE id = ? AND active = 1', [$id])->fetch();
+    if (!$l) fail('Diesen Eventleiter gibt es nicht.');
+    $tmp = tempPassword();
+    q('UPDATE leaders SET pw_hash = ?, must_change = 1 WHERE id = ?', [password_hash($tmp, PASSWORD_DEFAULT), $id]);
+    event(null, 'leader_reset', 0, $by . '|' . $l['name']);
+    out(['ok' => true, 'name' => $l['name'], 'password' => $tmp]);
+  }
+
+  case 'admin_leader_delete': {
+    $by = needAdmin(); $me = needStaff(); $id = (int) ($in['id'] ?? 0);
+    if ($id === ($me['id'] ?? 0)) fail('Du kannst dich nicht selbst entfernen.');
+    $name = q('SELECT name FROM leaders WHERE id = ?', [$id])->fetchColumn();
+    q('UPDATE leaders SET active = 0 WHERE id = ?', [$id]);
+    if ($name) event(null, 'leader_del', 0, $by . '|' . $name);
     out(['ok' => true]);
   }
 

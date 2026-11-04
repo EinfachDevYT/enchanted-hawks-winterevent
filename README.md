@@ -21,12 +21,14 @@ Unter **`/admin/`** gibt es zwei Rollen:
 
 | | Eventleitung | Helfer |
 |---|---|---|
-| Anmeldung | Name + gemeinsames Admin-Passwort | persönlicher Helfer-Code (`HELFER-…`) |
+| Anmeldung | Name + persönliches Passwort (oder Hauptzugang) | persönlicher Helfer-Code (`HELFER-…`) |
 | Ankünfte bestätigen, Live-Übersicht | ✅ | ✅ |
 | Clubs anlegen, löschen, zurücksetzen, Codes einsehen | ✅ | – |
-| Helfer anlegen und entfernen, Testmodus | ✅ | – |
+| Eventleiter und Helfer anlegen und entfernen, Testmodus | ✅ | – |
 
 - **Ankünfte bestätigen:** Oben „Ich stehe an: …“ den eigenen Ort wählen. Kommt ein Club im Spiel an, bei ihm auf **„Angekommen ✓“** drücken.
+- **Eventleiter anlegen:** Name eintragen → *Eventleiter anlegen*. Der Server erzeugt ein zufälliges **Start-Passwort**, das nur einmal angezeigt wird, dazu eine fertige Einladung zum Kopieren. Bei der ersten Anmeldung **muss** der Eventleiter ein eigenes Passwort festlegen (mindestens 8 Zeichen). Passwort vergessen? *Passwort zurücksetzen* erzeugt ein neues Start-Passwort und meldet alte Sitzungen ab. Jeder kann sein Passwort oben über *Passwort ändern* selbst ändern.
+- **Hauptzugang:** Das Passwort aus der Server-Einrichtung funktioniert weiterhin mit einem beliebigen Namen, als Notfall-Zugang.
 - **Helfer hinzufügen:** Name eintragen → *Helfer hinzufügen*. Die fertige Einladung mit Code und Anleitung wird kopiert und kann per DM verschickt werden. Entfernte Helfer verlieren sofort den Zugang.
 - **Club anlegen:** Clubname eingeben → *Erstellen*. Der Startcode ist **sofort** aktiv, mit fertigem DM-Text.
 - **Live-Übersicht:** wird alle 4 Sekunden aktualisiert. Zeigt Station, Fortschritt, letzte Aktivität, Zielzeit und Platz, dazu einen Verlauf mit allen Bestätigungen samt Namen.
@@ -40,7 +42,7 @@ Unter **`/admin/`** gibt es zwei Rollen:
 - **Zeiten und Platzierung misst der Server.** Sie lassen sich im Browser nicht fälschen.
 - **Gegen Durchprobieren:** Anmeldungen, Tresorversuche und Klicks sind pro Minute begrenzt.
 - Tresorcodes sind **je Club verschieden**. Abschreiben bei anderen Clubs bringt nichts.
-- Das Admin-Passwort liegt nur als Hash in `/etc/winterevent/config.php` auf dem Server, nie im Repo.
+- Passwörter liegen nur als Hash auf dem Server: der Hauptzugang in `/etc/winterevent/config.php`, persönliche Eventleiter-Passwörter in der Datenbank. Nichts davon steht im Repo.
 
 > 🧪 **Testmodus:** Im Admin-Bereich ein- und ausschaltbar. Solange er an ist, zeigt die Spielseite angemeldeten Admins (nur in deren Browser) einen Knopf „Test: Lösung“. Vor dem Event ausschalten.
 

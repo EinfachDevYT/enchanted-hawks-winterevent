@@ -309,10 +309,16 @@ button { font: inherit; color: inherit; }
 .waiting-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 0 rgba(242, 180, 90, .6); animation: waitpulse 1.6s ease-out infinite; }
 @keyframes waitpulse { 70% { box-shadow: 0 0 0 14px rgba(242, 180, 90, 0); } 100% { box-shadow: 0 0 0 0 rgba(242, 180, 90, 0); } }
 
-/* Name des nächsten Ziels: Wörter bleiben zusammen, Kacheln passen sich der Länge an */
-.big-code.name { --fs: clamp(.75rem, calc((100cqi - var(--n) * 12px) / (var(--n) * 1.12)), 2.4rem); column-gap: 0; row-gap: 8px; }
-.big-code.name > span.word { display: inline-flex; gap: 4px; white-space: nowrap; background: none; border: 0; padding: 0; min-width: 0; font-size: inherit; text-shadow: none; }
-.big-code.name > span.word + span.word { margin-left: calc(var(--fs) * 1.1); }
-.big-code.name > span.word + span.word.cont { margin-left: 4px; }
+/* Name des nächsten Ziels: feste Kachelgröße (passt für 13 Kacheln pro Zeile), lange Namen auf zwei Zeilen */
+.big-code.name { --ov: 12px; --fs: clamp(.75rem, calc((100cqi - 13 * var(--ov)) / (13 * 1.12)), 2.2rem); flex-direction: column; align-items: center; gap: 8px; }
+.big-code.name .line { display: flex; justify-content: center; align-items: center; gap: 4px; }
+.big-code.name .word { display: inline-flex; gap: 4px; }
+.big-code.name .sp { width: calc(var(--fs) * .8); }
 .big-code.name .ch { font-family: var(--mono); font-weight: 700; font-size: var(--fs); min-width: 1.1em; padding: 5px 3px; border-radius: 9px; color: var(--gold-2); background: rgba(5,8,18,.7); border: 1px solid rgba(242,180,90,.45); text-shadow: 0 0 18px rgba(242,180,90,.8); }
 .big-code.name .ch.sep { background: none; border: 0; color: var(--muted); min-width: .5em; padding-inline: 0; }
+@media (max-width: 520px) {
+  .reveal-card { padding-inline: 14px; }
+  .big-code.name { --ov: 7px; }
+  .big-code.name .line, .big-code.name .word { gap: 2px; }
+  .big-code.name .ch { padding: 4px 1px; border-radius: 6px; }
+}
